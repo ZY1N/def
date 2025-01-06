@@ -197,22 +197,16 @@ Twitter
 
 
 
-
-
-
+// changes 
 
 import React, { useState, useEffect } from "react";
-import { SortableItem } from "./sortableitem"; // or wherever your SortableItem is
+import { SortableItem } from "./sortableitem";
 
-// ========== [CHANGED] ==========
-// Previously, you had "assetsState" storing all assets. Now we store "groupsState," 
-// where each group can hold multiple asset variants.
 const desktopYLabels = ["4", "6"];
 const mobileYLabels = ["2", "3"];
 const smartCreativeUsecase = "hubspoke";
 
-// ========== [Unchanged] ==========
-// This is your static JSON. We're still calling it "abc."
+// [Unchanged] Static JSON for initial load
 const abc = {
   reqId: "Test-0a56ac1c-353c-42b7-a3db-d212edd70e11",
   pageOffset: 0,
@@ -331,7 +325,7 @@ const abc = {
 
 const HubspokePreview = () => {
   // -------------------------------------------------------------------
-  // [Unchanged] Some states: heading, subheading, etc.
+  // 1) All states
   // -------------------------------------------------------------------
   const [heading, setHeading] = useState(undefined);
   const [subheading, setSubHeading] = useState(undefined);
@@ -345,19 +339,20 @@ const HubspokePreview = () => {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  // ========== [Unchanged] Tab management (desktop vs. mobile) ==========
+  // [CHANGED] We keep the "activeTab" toggle, but both will use the same images
   const [activeTab, setActiveTab] = useState("desktop");
 
-  // ========== [CHANGED] Instead of assetsState, we store groupsState ==========
-  // each group = 1 item containing multiple asset variants
+  // Each item in groupsState represents a "group" with multiple assets
   const [groupsState, setGroupsState] = useState([]);
 
-  // ========== [CHANGED] imageBehaviors removed / replaced; not needed for “tight/crop” 
-  //   because we use actual assets from the JSON
-  const [newItemId, setNewItemId] = useState("");
-  const [selectedAssetId, setSelectedAssetId] = useState(null); // we treat this as "selected group"
+  // [ADDED] We'll store JSON for "Add New Item" here. The user can paste 
+  // a JSON snippet containing "groups: [...]."
+  const [newGroupsJson, setNewGroupsJson] = useState("");
 
-  // ========== [Unchanged] Assembly logic ==========
+  // Instead of asset-level selection, we treat "selectedAssetId" as the selected group’s ID
+  const [selectedAssetId, setSelectedAssetId] = useState(null);
+
+  // Keep track of how many rows (e.g. 4-row or 6-row)
   const [selectedAssembly, setSelectedAssembly] = useState("4");
   const [innerCollapsed, setInnerCollapsed] = useState(true);
   const [modalInput, setModalInput] = useState({
@@ -368,12 +363,12 @@ const HubspokePreview = () => {
   const [showModal, setShowModal] = useState({ type: "", assetId: null });
   const [draggedItemId, setDraggedItemId] = useState(null);
 
-  // ========== [Unchanged] data/loading/error for fetching the JSON ==========
+  // Data loading
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // ========== [Unchanged] metadata for pageName, creationDate, etc. ==========
+  // Basic metadata (pageName, etc.)
   const [metadata, setMetadata] = useState({
     pageName: "",
     bannerColor: "#FFFFFF",
@@ -383,14 +378,13 @@ const HubspokePreview = () => {
     deviceType: "Desktop",
   });
 
-  // ========== [NEW] Keep the gridOutline from JSON in state so we can update assetId on modelLabel change
+  // Keep the outline so we can update asset IDs
   const [gridOutline, setGridOutline] = useState([]);
 
   // -------------------------------------------------------------------
-  // 2) Hooks in stable order
+  // 2) Hooks
   // -------------------------------------------------------------------
   useEffect(() => {
-    // ========== [Unchanged] Simulate fetch ==========
     try {
       setData(abc);
       setLoading(false);
@@ -400,14 +394,12 @@ const HubspokePreview = () => {
     }
   }, []);
 
-  // ========== [CHANGED] We build "groupsState" from the JSON groups instead of "assetsState." ==========
   useEffect(() => {
     if (!data) return;
 
     const moduleResponse = data.modules?.[0]?.moduleResponse?.[0];
     if (!moduleResponse) return;
 
-    // Save the gridOutline for later updates
     setGridOutline(moduleResponse.gridOutline || []);
 
     const { pageName, status, clientInfo, createdts, groups } = moduleResponse;
@@ -423,16 +415,14 @@ const HubspokePreview = () => {
       status: status || "Draft",
     }));
 
-    // ========== [NEW] Build an array of "group items" for groupsState. Each item
-    // stores multiple assets and the "selectedAssetId" from the gridOutline. 
+    // Build groupsState from the groups array
     if (groups && Array.isArray(groups)) {
       const newGroupsState = groups.map((g) => {
-        // Look up the matching entry from gridOutline to get the current chosen "assetId"
-        const currentOutline = moduleResponse.gridOutline.find(
+        // figure out which asset is selected for this group
+        const outlineItem = moduleResponse.gridOutline.find(
           (o) => o.groupId === g.groupId
         );
-        const selectedAssetId = currentOutline?.assetId; // which variant is currently chosen?
-
+        const selectedAssetId = outlineItem?.assetId || g.assets?.[0]?.id;
         return {
           groupId: g.groupId,
           allAssets: g.assets || [],
@@ -443,24 +433,24 @@ const HubspokePreview = () => {
     }
   }, [data]);
 
-  // ========== [CHANGED] Instead of "assetsState," we update the assembly based on "groupsState" ==========
   useEffect(() => {
+    // update assembly anytime groups or the activeTab changes
     updateAssembly();
   }, [activeTab, groupsState]);
 
-  // ========== [Unchanged] Collapsing logic for mobile ==========
   useEffect(() => {
+    // For mobile, collapse if needed
     if (activeTab === "mobile") {
       const maxItemsPerRow = parseInt(selectedAssembly, 10);
-      const chunks = chunkArray(groupsState, maxItemsPerRow);
-      setInnerCollapsed(chunks.length > 2);
+      const groupChunks = chunkArray(groupsState, maxItemsPerRow);
+      setInnerCollapsed(groupChunks.length > 2);
     } else {
       setInnerCollapsed(false);
     }
   }, [activeTab, selectedAssembly, groupsState]);
 
   // -------------------------------------------------------------------
-  // 3) Conditional returns AFTER all hooks
+  // 3) Conditional Returns
   // -------------------------------------------------------------------
   if (loading) return <div>Loading data...</div>;
   if (error) return <div>Error loading data: {error.message}</div>;
@@ -491,18 +481,15 @@ const HubspokePreview = () => {
     return result;
   }
 
-  // ========== [NEW] handleModelLabelChange updates the group's "selectedAssetId" 
-  // and the matching assetId in gridOutline
+  // When user picks a new modelLabel in the dropdown
   const handleModelLabelChange = (groupId, newModelLabel) => {
     setGroupsState((prev) =>
       prev.map((g) => {
         if (g.groupId === groupId) {
-          // find the asset whose modelLabel matches the new choice
           const foundAsset = g.allAssets.find(
             (a) => a.modelLabel === newModelLabel
           );
           if (foundAsset) {
-            // also update gridOutline => set the "assetId" for this group to foundAsset.id
             setGridOutline((prevOutline) =>
               prevOutline.map((o) => {
                 if (o.groupId === groupId) {
@@ -519,12 +506,14 @@ const HubspokePreview = () => {
     );
   };
 
-  // ========== [CHANGED] We no longer do "getImageStyle" with "tight" or "overflow." 
-  // The actual image is different for each modelLabel from JSON.
+  // We only have one set of images (desktop), so use the same images in both tabs
   function getImageSize(assemblyLabel, screenSize) {
     const maxItemsPerRow = parseInt(assemblyLabel, 10);
-    const isDesktop = activeTab === "desktop";
-    if (isDesktop) {
+
+    // If activeTab is desktop, we do logic for 1280 vs Inh
+    // If activeTab is mobile, we do logic for 375
+    // But in both cases, we display the same finalAsset.image
+    if (activeTab === "desktop") {
       if (screenSize === "1280") {
         if (maxItemsPerRow === 4) return 290;
         if (maxItemsPerRow === 6) return 192;
@@ -533,6 +522,7 @@ const HubspokePreview = () => {
         if (maxItemsPerRow === 6) return 132;
       }
     } else {
+      // Mobile
       if (screenSize === "375") {
         if (maxItemsPerRow === 2) return 135;
         if (maxItemsPerRow === 3) return 104;
@@ -541,14 +531,48 @@ const HubspokePreview = () => {
     return 100;
   }
 
-  // ========== [Unchanged] Placeholder for adding new items. Now you'd have to add a new group, etc. ==========
+  // [ADDED] “Add new item” accepts a JSON with { groups: [...] } 
+  // and appends them to groupsState
   const handleAddNewItem = () => {
-    alert("handleAddNewItem not fully implemented in this example.");
+    if (!newGroupsJson.trim()) {
+      alert("Please paste valid JSON with a 'groups' array.");
+      return;
+    }
+    try {
+      // Example: user pastes 
+      // {
+      //   "groups": [
+      //      { "groupId": "...", "assets": [...] },
+      //      ...
+      //   ]
+      // }
+      const parsed = JSON.parse(newGroupsJson);
+      const newGroups = parsed.groups || [];
+
+      // Map each new group into our standard shape
+      const appendedItems = newGroups.map((g) => {
+        // No gridOutline for them yet, so we pick the first asset’s ID as default
+        const defaultId = g.assets?.[0]?.id;
+        return {
+          groupId: g.groupId,
+          allAssets: g.assets || [],
+          selectedAssetId: defaultId,
+        };
+      });
+
+      // Append them
+      setGroupsState((prev) => [...prev, ...appendedItems]);
+
+      // Clear the input
+      setNewGroupsJson("");
+      alert(`Appended ${newGroups.length} new groups to the ordering.`);
+    } catch (err) {
+      alert("Invalid JSON. Please ensure it's valid and includes 'groups'.");
+      console.error(err);
+    }
   };
 
-  // ----------------------------------
-  // ========== [CHANGED] Drag & drop for "groupsState," not "assetsState" ==========
-  // ----------------------------------
+  // Drag & Drop
   const handleDragStart = (e, groupId) => {
     setDraggedItemId(groupId);
     e.dataTransfer.effectAllowed = "move";
@@ -572,24 +596,11 @@ const HubspokePreview = () => {
     setDraggedItemId(null);
   };
 
-  // ========== [CHANGED] Instead of "handleSelectAsset," we have "handleSelectAsset(groupId)" ==========
   const handleSelectAsset = (groupId) => {
     setSelectedAssetId(groupId === selectedAssetId ? null : groupId);
   };
 
-  // Example of updating status at the group level
-  const updateAssetStatus = (groupId, newStatus) => {
-    if (newStatus === "Deleted") {
-      // remove the group from groupsState entirely
-      setGroupsState((prev) => prev.filter((g) => g.groupId !== groupId));
-      setSelectedAssetId(null);
-      updateAssembly();
-      return;
-    }
-    alert(`Changed status of group ${groupId} to ${newStatus}. (placeholder)`);
-  };
-
-  // ========== [Unchanged] handleAction calls updateAssetStatus or shows modals, etc. ==========
+  // Basic action logic
   const handleAction = (actionType) => {
     if (!selectedAssetId) {
       alert("No group selected.");
@@ -599,7 +610,7 @@ const HubspokePreview = () => {
     if (!selectedGroup) return;
 
     if (actionType === "undo") {
-      updateAssetStatus(selectedGroup.groupId, null);
+      alert("Example: undo pressed");
       setSelectedAssetId(null);
     } else if (actionType === "approve") {
       setSelectedObj(selectedGroup);
@@ -613,13 +624,19 @@ const HubspokePreview = () => {
     }
   };
 
-  // ========== [Unchanged] modal handlers, simplified here ==========
+  // handleModalSubmit => when user confirms 
   const handleModalSubmit = () => {
+    const { type, assetId } = showModal;
+    if (type === "delete") {
+      // remove from groupsState
+      setGroupsState((prev) => prev.filter((g) => g.groupId !== assetId));
+      setSelectedAssetId(null);
+      updateAssembly();
+    }
     setShowModal({ type: "", assetId: null });
     setModalInput({ reason: "", details: "", recommendations: "" });
-    setSelectedAssetId(null);
-    updateAssembly();
   };
+
   const handleModalClose = () => {
     setShowModal({ type: "", assetId: null });
     setModalInput({ reason: "", details: "", recommendations: "" });
@@ -629,8 +646,8 @@ const HubspokePreview = () => {
     setSelectedAssembly(e.target.value);
   };
 
-  // ========== [CHANGED] "renderMockupSections" now looks at groupsState. 
-  //   Each group picks its "selected" asset to display. No CSS-based transform.
+  // [CHANGED] “renderMockupSections” uses desktop images for BOTH tabs
+  // but we differentiate screen sizes if user toggles the tab
   const renderMockupSections = (assemblies) => {
     const isMobile = activeTab === "mobile";
     return (
@@ -643,6 +660,11 @@ const HubspokePreview = () => {
             groupChunks = groupChunks.slice(0, 2);
           }
 
+          // For desktop, we’ll do ["1280", "Inh"] 
+          // For mobile, we’ll do ["375"] (or "375", "Inh" if you like).
+          const screenLabels =
+            activeTab === "desktop" ? ["1280", "Inh"] : ["375"];
+
           return (
             <div className="hubspokep-banner-container" key={assemblyLabel}>
               <div style={{ display: "flex" }}>
@@ -651,128 +673,126 @@ const HubspokePreview = () => {
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", gap: "20px", overflowX: "auto" }}>
-                    {/** We show each screenSize (e.g. 1280, Inh, or 375) in a horizontal row */}
-                    {activeTab === "desktop" ? ["1280", "Inh"] : ["375"]
-                      .map((screenSize, index) => {
-                        const labelText = `${screenSize} (${
-                          activeTab === "desktop" ? "D" : "M"
-                        })`;
-                        return (
-                          <div key={`${assemblyLabel}-${screenSize}`}>
+                    {screenLabels.map((screenSize, index) => {
+                      const labelText = `${screenSize} (${
+                        isMobile ? "M" : "D"
+                      })`;
+                      return (
+                        <div key={`${assemblyLabel}-${screenSize}`}>
+                          <div
+                            className="hubspokep-banner-label"
+                            style={{
+                              backgroundColor:
+                                index === 0
+                                  ? "rgb(0, 57, 110)"
+                                  : "rgb(172, 173, 176)",
+                              color:
+                                index === 0
+                                  ? "rgb(255, 255, 255)"
+                                  : "rgb(81, 83, 87)",
+                            }}
+                          >
+                            {labelText}
+                          </div>
+                          <div
+                            className="hubspokep-banner"
+                            style={{ backgroundColor: metadata.bannerColor }}
+                          >
+                            <div className="hubspokep-page-name">
+                              <h3>{metadata.pageName}</h3>
+                            </div>
                             <div
-                              className="hubspokep-banner-label"
+                              className="hubspokep-banner-grid"
                               style={{
-                                backgroundColor:
-                                  index === 0
-                                    ? "rgb(0, 57, 110)"
-                                    : "rgb(172, 173, 176)",
-                                color:
-                                  index === 0
-                                    ? "rgb(255, 255, 255)"
-                                    : "rgb(81, 83, 87)",
+                                display: "grid",
+                                gridTemplateColumns: `repeat(${maxItemsPerRow}, 1fr)`,
+                                gap: "10px",
                               }}
                             >
-                              {labelText}
-                            </div>
-                            <div
-                              className="hubspokep-banner"
-                              style={{ backgroundColor: metadata.bannerColor }}
-                            >
-                              <div className="hubspokep-page-name">
-                                <h3>{metadata.pageName}</h3>
-                              </div>
-                              <div
-                                className="hubspokep-banner-grid"
-                                style={{
-                                  display: "grid",
-                                  gridTemplateColumns: `repeat(${maxItemsPerRow}, 1fr)`,
-                                  gap: "10px",
-                                }}
-                              >
-                                {groupChunks.map((chunk, chunkIndex) => (
-                                  <React.Fragment key={`chunk-${chunkIndex}`}>
-                                    {chunk.map((group) => {
-                                      // pick the currently selected asset
-                                      const selected = group.allAssets.find(
-                                        (a) => a.id === group.selectedAssetId
-                                      );
-                                      const finalAsset = selected || group.allAssets[0];
+                              {groupChunks.map((chunk, chunkIndex) => (
+                                <React.Fragment key={`chunk-${chunkIndex}`}>
+                                  {chunk.map((group) => {
+                                    const selected = group.allAssets.find(
+                                      (a) => a.id === group.selectedAssetId
+                                    );
+                                    const finalAsset =
+                                      selected || group.allAssets[0];
 
-                                      const cellSize = getImageSize(
-                                        assemblyLabel,
-                                        screenSize
-                                      );
+                                    const cellSize = getImageSize(
+                                      assemblyLabel,
+                                      screenSize
+                                    );
 
-                                      return (
+                                    return (
+                                      <div
+                                        key={`${assemblyLabel}-${screenSize}-${group.groupId}`}
+                                        style={{
+                                          display: "flex",
+                                          flexDirection: "column",
+                                          alignItems: "center",
+                                          width: `${cellSize}px`,
+                                        }}
+                                      >
                                         <div
-                                          key={`${assemblyLabel}-${screenSize}-${group.groupId}`}
                                           style={{
+                                            backgroundColor: "#EEE",
+                                            borderRadius: "8px",
                                             display: "flex",
-                                            flexDirection: "column",
+                                            justifyContent: "center",
                                             alignItems: "center",
                                             width: `${cellSize}px`,
+                                            height: `${cellSize}px`,
+                                            marginBottom: "5px",
                                           }}
                                         >
-                                          <div
+                                          {/* The same finalAsset.image regardless of tab */}
+                                          <img
+                                            src={finalAsset?.image}
+                                            alt={finalAsset?.altText}
                                             style={{
-                                              backgroundColor: "#EEE",
-                                              borderRadius: "8px",
-                                              display: "flex",
-                                              justifyContent: "center",
-                                              alignItems: "center",
-                                              width: `${cellSize}px`,
-                                              height: `${cellSize}px`,
-                                              marginBottom: "5px",
+                                              width: "100%",
+                                              height: "100%",
+                                              objectFit: "contain",
                                             }}
-                                          >
-                                            <img
-                                              src={finalAsset?.image}
-                                              alt={finalAsset?.altText}
-                                              style={{
-                                                width: "100%",
-                                                height: "100%",
-                                                objectFit: "contain",
-                                              }}
-                                            />
-                                          </div>
-                                          <div
-                                            style={{
-                                              fontSize: "12px",
-                                              textAlign: "center",
-                                              whiteSpace: "normal",
-                                            }}
-                                          >
-                                            {finalAsset?.altText}
-                                          </div>
+                                          />
                                         </div>
-                                      );
-                                    })}
-                                  </React.Fragment>
-                                ))}
-                              </div>
-                              {isMobile && groupChunks.length > 2 && (
-                                <button
-                                  onClick={() =>
-                                    setInnerCollapsed((prev) => !prev)
-                                  }
-                                  style={{
-                                    width: "100%",
-                                    borderRadius: "500px",
-                                    cursor: "pointer",
-                                    backgroundColor: "transparent",
-                                    border: "solid black 1px",
-                                    marginTop: "4px",
-                                    fontSize: "1rem",
-                                    height: "32px",
-                                  }}
-                                >
-                                  {innerCollapsed ? "See More" : "See Less"}
-                                </button>
-                              )}
+                                        <div
+                                          style={{
+                                            fontSize: "12px",
+                                            textAlign: "center",
+                                            whiteSpace: "normal",
+                                          }}
+                                        >
+                                          {finalAsset?.altText}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </React.Fragment>
+                              ))}
                             </div>
+                            {isMobile && chunkArray(groupsState, maxItemsPerRow).length >
+                              2 && (
+                              <button
+                                onClick={() => setInnerCollapsed((prev) => !prev)}
+                                style={{
+                                  width: "100%",
+                                  borderRadius: "500px",
+                                  cursor: "pointer",
+                                  backgroundColor: "transparent",
+                                  border: "solid black 1px",
+                                  marginTop: "4px",
+                                  fontSize: "1rem",
+                                  height: "32px",
+                                }}
+                              >
+                                {innerCollapsed ? "See More" : "See Less"}
+                              </button>
+                            )}
                           </div>
-                        );
-                      })}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -787,36 +807,16 @@ const HubspokePreview = () => {
     setSelectedAssetId(null);
   }
 
-  // ========== [CHANGED] We do not differentiate "Approved"/"Rejected" at the asset level. 
-  //   If you want that, you'd store statuses inside each group or each asset. 
-  //   Here we just show some example action buttons if a group is selected.
+  // Decide action buttons
   let actionButtons = null;
   if (selectedAssetId) {
-    const selectedGroup = groupsState.find((g) => g.groupId === selectedAssetId);
-    if (selectedGroup) {
-      actionButtons = (
-        <>
-          <button
-            className="hubspokep-action-button hubspokep-approve-button"
-            onClick={() => handleAction("approve")}
-          >
-            Approve
-          </button>
-          <button
-            className="hubspokep-action-button hubspokep-reject-button"
-            onClick={() => handleAction("reject")}
-          >
-            Reject
-          </button>
-          <button
-            className="hubspokep-action-button hubspokep-delete-button"
-            onClick={() => handleAction("delete")}
-          >
-            Delete
-          </button>
-        </>
-      );
-    }
+    actionButtons = (
+      <>
+        <button onClick={() => handleAction("approve")}>Approve</button>
+        <button onClick={() => handleAction("reject")}>Reject</button>
+        <button onClick={() => handleAction("delete")}>Delete</button>
+      </>
+    );
   }
 
   // -------------------------------------------------------------------
@@ -845,26 +845,27 @@ const HubspokePreview = () => {
               <strong>Device Type:</strong> {metadata.deviceType}
             </p>
           </div>
+
+          {/* [ADDED] "Add New Item" with JSON input */}
           <div className="hubspokep-add-item">
-            <h4>Add New Item by ID</h4>
-            <input
-              type="text"
-              placeholder="Enter new asset ID"
-              value={newItemId}
-              onChange={(e) => setNewItemId(e.target.value)}
+            <h4>Add New Item by JSON</h4>
+            <textarea
+              placeholder='Paste something like: {"groups":[{groupId:"...",assets:[...]},...]}'
+              value={newGroupsJson}
+              onChange={(e) => setNewGroupsJson(e.target.value)}
+              rows={5}
+              style={{ width: "100%", marginBottom: "8px" }}
             />
-            <button onClick={handleAddNewItem}>Add Item</button>
+            <button onClick={handleAddNewItem}>Add Groups from JSON</button>
           </div>
         </div>
 
-        {/* Groups / Assets Section */}
+        {/* Groups/Assets Section */}
         <div className="hubspokep-assets-section">
           <div className="hubspokep-assets-header">
             <h3>Assets (Groups)</h3>
             <div style={{ display: "inline-block" }}>{actionButtons}</div>
           </div>
-
-          {/* ========== [CHANGED] We map over groupsState, not assetsState ========== */}
           <div
             className="hubspokep-assets-grid"
             onClick={(e) => e.stopPropagation()}
@@ -879,21 +880,20 @@ const HubspokePreview = () => {
                 onDrop={handleDrop}
                 onSelectGroup={handleSelectAsset}
                 isSelected={selectedAssetId === group.groupId}
-                // ========== [NEW] Let the child call back to change modelLabel (asset variant) ==========
                 onModelLabelChange={handleModelLabelChange}
               />
             ))}
           </div>
         </div>
 
-        {/* Tabs */}
+        {/* Tabs [CHANGED] We keep the toggle, but both tabs show the same finalAsset.image */}
         <div className="hubspokep-tabs" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={() => {
               setActiveTab("desktop");
               setMetadata((prev) => ({ ...prev, deviceType: "Desktop" }));
             }}
-            className={activeTab === "desktop" ? "active hubspokep-desktop" : ""}
+            className={activeTab === "desktop" ? "active" : ""}
             aria-label="Switch to Desktop Tab"
           >
             Desktop
@@ -903,7 +903,840 @@ const HubspokePreview = () => {
               setActiveTab("mobile");
               setMetadata((prev) => ({ ...prev, deviceType: "Mobile" }));
             }}
-            className={activeTab === "mobile" ? "active hubspokep-mobile" : ""}
+            className={activeTab === "mobile" ? "active" : ""}
+            aria-label="Switch to Mobile Tab"
+          >
+            Mobile
+          </button>
+        </div>
+
+        {/* Assembly Selection */}
+        <div
+          className="hubspokep-assembly-selection"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <label>Choose Assembly:</label>
+          <select value={selectedAssembly} onChange={handleAssemblyChange}>
+            {activeTab === "desktop"
+              ? desktopYLabels.map((label) => (
+                  <option key={label} value={label}>
+                    {label}-row Assembly
+                  </option>
+                ))
+              : mobileYLabels.map((label) => (
+                  <option key={label} value={label}>
+                    {label}-row Assembly
+                  </option>
+                ))}
+          </select>
+        </div>
+
+        {/* Render the preview */}
+        {renderMockupSections([selectedAssembly])}
+
+        {/* Save Button */}
+        <div className="hubspokep-save-button-container">
+          <button
+            className="hubspokep-save-button"
+            onClick={() => {
+              console.log("Final gridOutline:", gridOutline);
+              alert("Saved!");
+            }}
+          >
+            Save
+          </button>
+        </div>
+
+        {/* Approve/Reject/Delete Modals (placeholder) */}
+        {showApproveModal && <div>Approve Modal placeholder</div>}
+        {showRejectModal && <div>Reject Modal placeholder</div>}
+        {showDeleteModal && <div>Delete Modal placeholder</div>}
+      </div>
+    </div>
+  );
+};
+
+export default HubspokePreview;
+
+
+import React from "react";
+
+export const SortableItem = ({
+  group,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onSelectGroup,
+  isSelected,
+  onModelLabelChange,
+}) => {
+  // The currently selected asset
+  const selectedAsset =
+    group.allAssets.find((a) => a.id === group.selectedAssetId) ||
+    group.allAssets[0];
+
+  // The user can pick which modelLabel to show
+  const modelLabels = group.allAssets.map((a) => a.modelLabel);
+
+  const handleChange = (e) => {
+    onModelLabelChange(group.groupId, e.target.value);
+  };
+
+  return (
+    <div
+      className={`sortable-item ${isSelected ? "selected" : ""}`}
+      draggable
+      onDragStart={(e) => onDragStart(e, group.groupId)}
+      onDragOver={onDragOver}
+      onDrop={(e) => onDrop(e, group.groupId)}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelectGroup(group.groupId);
+      }}
+      style={{
+        border: isSelected ? "2px solid #0073e6" : "1px solid #ccc",
+        borderRadius: "4px",
+        padding: "10px",
+        margin: "5px",
+        cursor: "grab",
+        width: "160px",
+        textAlign: "center",
+      }}
+    >
+      <div style={{ marginBottom: "8px", fontWeight: "bold" }}>
+        Group: {group.groupId}
+      </div>
+      <div style={{ marginBottom: "8px" }}>
+        <img
+          alt={selectedAsset?.altText}
+          src={selectedAsset?.image}
+          style={{ width: "100%", height: "80px", objectFit: "contain" }}
+        />
+      </div>
+      <div>
+        <select
+          value={selectedAsset?.modelLabel}
+          onChange={handleChange}
+          style={{ width: "100%", padding: "4px", borderRadius: "4px" }}
+        >
+          {modelLabels.map((label) => (
+            <option key={label} value={label}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+};
+
+
+
+//changes 2
+
+import React, { useState, useEffect } from "react";
+import { SortableItem } from "./sortableitem"; // Your child component
+
+// We keep these arrays for row assemblies
+const desktopYLabels = ["4", "6"];
+const mobileYLabels = ["2", "3"];
+const smartCreativeUsecase = "hubspoke";
+
+// [Unchanged] - This is your base JSON for initial load
+const abc = {
+  reqId: "Test-0a56ac1c-353c-42b7-a3db-d212edd70e11",
+  pageOffset: 0,
+  modules: [
+    {
+      zone: null,
+      moduleType: null,
+      moduleId: null,
+      configs: null,
+      moduleResponse: [
+        {
+          gridId: "dd4c7927-60d4-4377-a582-de87fdeeee",
+          status: "pending",
+          gridName: "Test 1",
+          pageName: "Fashion",
+          pageId: "5438",
+          updatedts: 1718057641528,
+          createdts: 1718057641528,
+          usecase: "hubspoke-grid",
+          clientInfo: {
+            requestBy: "aOsOcI8",
+            channel: "Apollo Smart Creative",
+          },
+          gridOutline: [
+            {
+              position: 0,
+              usecase: "hubspoke-pill",
+              groupId: "test-req-sc-hubspoke-7",
+              assetId: "de0d50a3-db1a-4654-b32e-123d57670£65",
+            },
+            {
+              position: 1,
+              usecase: "hubspoke-pill",
+              groupId: "test-req-sc-hubspoke-5",
+              assetId: "6c722£13-8d48-45d-b361-39bfb6223eb2",
+            },
+          ],
+          groups: [
+            {
+              groupId: "test-reg-sc-hubspoke-7",
+              status: "generated",
+              updatedts: 1734957219756,
+              createdts: 1734957219756,
+              creativeAltText: {
+                content: "Image shows Dyson Supersonic™ Hair Dryer | Fuchsia",
+                creativeAiGenerated: false,
+                generationInProgress: true,
+              },
+              type: "creative",
+              itemIds: ["5087483962"],
+              usecase: "hubspoke-pill",
+              clientInfo: {
+                requestBy: "kOe042c",
+                channel: "scPlugin",
+                env: "stage",
+              },
+              assets: [
+                {
+                  id: "de0d50a3-db1a-4654-b32e-123d57670£65",
+                  modelLabel: "tight",
+                  altText: "Image shows Dyson Supersonic™ Hair Dryer | Fuchsia",
+                  image: "http://app.stg0.pronto.platform.prod.walmart.com/",
+                },
+                {
+                  id: "a8e253dd-eac5-4cbb-b8fa-07820933b0af",
+                  modelLabel: "crop",
+                  altText: "Image shows Dyson Supersonic™ Hair Dryer | Fuchsia",
+                  image: "http://app.stg0.pronto.platform.prod.walmart.com/",
+                },
+              ],
+            },
+            {
+              groupId: "test-req-sc-hubspoke-5",
+              status: "generated",
+              updatedts: 1734956012781,
+              createdts: 1734956012781,
+              creativeAltText: {
+                content: "Image shows Dyson Supersonic™ Hair Dryer | Fuchsia",
+                creativeAiGenerated: false,
+                generationInProgress: true,
+              },
+              type: "creative",
+              itemIds: ["5087483962"],
+              usecase: "hubspoke-pill",
+              clientInfo: {
+                requestBy: "KOe042c",
+                channel: "scPlugin",
+                env: "stage",
+              },
+              assets: [
+                {
+                  id: "6c722£13-8d48-45fd-b361-39bfb6223eb21",
+                  modelLabel: "crop",
+                  altText:
+                    "Image shows Dyson Supersonic™ Hair Dryer | Fuchsia/Nickel | Refurbished",
+                  image: "http://app.stg0.pronto.platform.prod.walmart.com/",
+                },
+                {
+                  id: "bce9befc-c99e-4£71-9150-a6912b3f1a9d",
+                  modelLabel: "tight",
+                  altText: "Image shows Dyson Supersonic™ Hair Dryer | Fuchsia",
+                  image: "http://app.stg0.pronto.platform.prod.walmart.com/",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  ],
+  subType: null,
+  errorDetails: [],
+  features: null,
+  styles: null,
+};
+
+const HubspokePreview = () => {
+  // -------------------------------------------------------------------
+  // 1) All top-level state
+  // -------------------------------------------------------------------
+  const [heading, setHeading] = useState(undefined);
+  const [subheading, setSubHeading] = useState(undefined);
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [requestProcessing, setRequestProcessing] = useState(false);
+  const [reason, setReason] = useState(undefined);
+  const [selectedObj, setSelectedObj] = useState(undefined);
+  const [recommendation, setRecommendation] = useState(undefined);
+  const [comments, setComments] = useState(undefined);
+  const [reasonSelected, setReasonSelected] = useState(undefined);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  // We keep a toggle for desktop vs mobile:
+  const [activeTab, setActiveTab] = useState("desktop");
+
+  // [CHANGED] groupsState: each group has "groupId, allAssets, selectedAssetId"
+  const [groupsState, setGroupsState] = useState([]);
+
+  // If a user clicks a group, we store that group's ID here
+  const [selectedAssetId, setSelectedAssetId] = useState(null);
+
+  // For row assembly (4 or 6 in desktop, 2 or 3 in mobile):
+  const [selectedAssembly, setSelectedAssembly] = useState("4");
+  const [innerCollapsed, setInnerCollapsed] = useState(true);
+  const [modalInput, setModalInput] = useState({
+    reason: "",
+    details: "",
+    recommendations: "",
+  });
+  const [showModal, setShowModal] = useState({ type: "", assetId: null });
+  const [draggedItemId, setDraggedItemId] = useState(null);
+
+  // Data loading states
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Basic metadata for the page
+  const [metadata, setMetadata] = useState({
+    pageName: "",
+    bannerColor: "#FFFFFF",
+    creator: "",
+    creationDate: "",
+    status: "",
+    deviceType: "Desktop",
+  });
+
+  // We keep the outline from the original JSON so we can update asset IDs
+  const [gridOutline, setGridOutline] = useState([]);
+
+  // -------------------------------------------------------------------
+  // 2) Hooks in stable order
+  // -------------------------------------------------------------------
+  useEffect(() => {
+    // Simulate fetching the base "abc" JSON:
+    try {
+      setData(abc);
+      setLoading(false);
+    } catch (err) {
+      setError(err);
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!data) return;
+    const moduleResponse = data.modules?.[0]?.moduleResponse?.[0];
+    if (!moduleResponse) return;
+
+    // store the existing outline
+    setGridOutline(moduleResponse.gridOutline || []);
+
+    // parse metadata
+    const { pageName, status, clientInfo, createdts, groups } = moduleResponse;
+    const creationDateStr = createdts
+      ? new Date(createdts).toLocaleString()
+      : new Date().toLocaleString();
+
+    setMetadata((prev) => ({
+      ...prev,
+      pageName: pageName || "Untitled Page",
+      creator: clientInfo?.requestBy || "Unknown",
+      creationDate: creationDateStr,
+      status: status || "Draft",
+    }));
+
+    // build groupsState from the JSON
+    if (groups && Array.isArray(groups)) {
+      const newGroups = groups.map((g) => {
+        // find the existing outline entry for this group
+        const outlineItem = moduleResponse.gridOutline.find(
+          (o) => o.groupId === g.groupId
+        );
+        // if none found, pick the first asset as default
+        const selectedAssetId = outlineItem?.assetId || g.assets?.[0]?.id;
+
+        return {
+          groupId: g.groupId,
+          allAssets: g.assets || [],
+          selectedAssetId,
+        };
+      });
+      setGroupsState(newGroups);
+    }
+  }, [data]);
+
+  // if groupsState or tab changes, update assembly selection
+  useEffect(() => {
+    updateAssembly();
+  }, [activeTab, groupsState]);
+
+  // if mobile, decide whether to collapse
+  useEffect(() => {
+    if (activeTab === "mobile") {
+      const maxItemsPerRow = parseInt(selectedAssembly, 10);
+      const groupChunks = chunkArray(groupsState, maxItemsPerRow);
+      setInnerCollapsed(groupChunks.length > 2);
+    } else {
+      setInnerCollapsed(false);
+    }
+  }, [activeTab, selectedAssembly, groupsState]);
+
+  // -------------------------------------------------------------------
+  // 3) Early returns if loading or error
+  // -------------------------------------------------------------------
+  if (loading) return <div>Loading data...</div>;
+  if (error) return <div>Error loading data: {error.message}</div>;
+  if (!data) return <div>No data available</div>;
+
+  // get moduleResponse
+  const moduleResponse = data.modules?.[0]?.moduleResponse?.[0];
+  if (!moduleResponse) {
+    return <div>No moduleResponse found in data</div>;
+  }
+
+  // -------------------------------------------------------------------
+  // 4) Helper Functions
+  // -------------------------------------------------------------------
+  function updateAssembly() {
+    const count = groupsState.length;
+    if (activeTab === "desktop") {
+      setSelectedAssembly(count > 4 ? "6" : "4");
+    } else {
+      setSelectedAssembly(count <= 4 ? "2" : "3");
+    }
+  }
+
+  function chunkArray(array, size) {
+    const result = [];
+    for (let i = 0; i < array.length; i += size) {
+      result.push(array.slice(i, i + size));
+    }
+    return result;
+  }
+
+  // handleBehaviorChange => picking new modelLabel
+  const handleModelLabelChange = (groupId, newModelLabel) => {
+    setGroupsState((prev) =>
+      prev.map((g) => {
+        if (g.groupId === groupId) {
+          // find the asset with that modelLabel
+          const foundAsset = g.allAssets.find(
+            (a) => a.modelLabel === newModelLabel
+          );
+          if (foundAsset) {
+            // update the gridOutline so assetId matches foundAsset.id
+            setGridOutline((prevOutline) =>
+              prevOutline.map((o) => {
+                if (o.groupId === groupId) {
+                  return { ...o, assetId: foundAsset.id };
+                }
+                return o;
+              })
+            );
+            return { ...g, selectedAssetId: foundAsset.id };
+          }
+        }
+        return g;
+      })
+    );
+  };
+
+  function getImageSize(assemblyLabel, screenSize) {
+    const maxItemsPerRow = parseInt(assemblyLabel, 10);
+    const isDesktop = activeTab === "desktop";
+
+    if (isDesktop) {
+      if (screenSize === "1280") {
+        if (maxItemsPerRow === 4) return 290;
+        if (maxItemsPerRow === 6) return 192;
+      } else if (screenSize === "Inh") {
+        if (maxItemsPerRow === 4) return 200;
+        if (maxItemsPerRow === 6) return 132;
+      }
+    } else {
+      // mobile
+      if (screenSize === "375") {
+        if (maxItemsPerRow === 2) return 135;
+        if (maxItemsPerRow === 3) return 104;
+      }
+    }
+    return 100;
+  }
+
+  // [NEW / CHANGED] handleSave to create a new JSON based on groupsState
+  const handleSave = () => {
+    // 1) Rebuild an updated gridOutline
+    //    Each group's new position is its index in groupsState
+    const updatedGridOutline = groupsState.map((g, index) => ({
+      position: index,
+      usecase: "hubspoke-pill", // or whatever
+      groupId: g.groupId,
+      assetId: g.selectedAssetId,
+    }));
+
+    // 2) Rebuild a "groups" array in the new order
+    //    This can preserve other fields (status, creativeAltText, etc.) if needed,
+    //    but here we just keep assets, groupId, plus some placeholders
+    const updatedGroups = groupsState.map((g) => {
+      return {
+        groupId: g.groupId,
+        status: "generated", // placeholder
+        updatedts: Date.now(),
+        createdts: Date.now(),
+        assets: g.allAssets,
+      };
+    });
+
+    // 3) Construct a new moduleResponse with the updated outline, groups, etc.
+    //    We keep other fields from moduleResponse
+    const newModuleResponse = {
+      ...moduleResponse,
+      gridOutline: updatedGridOutline,
+      groups: updatedGroups,
+    };
+
+    // 4) Rebuild the top-level data object
+    const newData = {
+      ...data,
+      modules: [
+        {
+          ...data.modules[0],
+          moduleResponse: [newModuleResponse],
+        },
+      ],
+    };
+
+    // For demonstration, we just log it out
+    console.log("Newly saved JSON:", JSON.stringify(newData, null, 2));
+    alert("New JSON has been logged to console!");
+  };
+
+  // Drag & drop logic
+  const handleDragStart = (e, groupId) => {
+    setDraggedItemId(groupId);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+  const handleDrop = (e, groupId) => {
+    e.preventDefault();
+    const draggedIndex = groupsState.findIndex((g) => g.groupId === draggedItemId);
+    const dropIndex = groupsState.findIndex((g) => g.groupId === groupId);
+    if (draggedIndex !== dropIndex) {
+      const updated = [...groupsState];
+      const [draggedGroup] = updated.splice(draggedIndex, 1);
+      updated.splice(dropIndex, 0, draggedGroup);
+      setGroupsState(updated);
+    }
+    setDraggedItemId(null);
+  };
+
+  const handleSelectAsset = (groupId) => {
+    setSelectedAssetId(groupId === selectedAssetId ? null : groupId);
+  };
+
+  // Action logic placeholders
+  const handleAction = (actionType) => {
+    if (!selectedAssetId) {
+      alert("No group selected.");
+      return;
+    }
+    const selectedGroup = groupsState.find((g) => g.groupId === selectedAssetId);
+    if (!selectedGroup) return;
+
+    if (actionType === "undo") {
+      alert("Example: undo pressed");
+      setSelectedAssetId(null);
+    } else if (actionType === "approve") {
+      setSelectedObj(selectedGroup);
+      setShowApproveModal(true);
+    } else if (actionType === "delete") {
+      setSelectedObj(selectedGroup);
+      setShowDeleteModal(true);
+    } else if (actionType === "reject") {
+      setSelectedObj(selectedGroup);
+      setShowRejectModal(true);
+    }
+  };
+
+  // [CHANGED] If user confirms "delete," remove from groupsState
+  const handleModalSubmit = () => {
+    const { type, assetId } = showModal;
+    if (type === "delete") {
+      setGroupsState((prev) => prev.filter((g) => g.groupId !== assetId));
+      setSelectedAssetId(null);
+      updateAssembly();
+    }
+    setShowModal({ type: "", assetId: null });
+    setModalInput({ reason: "", details: "", recommendations: "" });
+  };
+
+  const handleModalClose = () => {
+    setShowModal({ type: "", assetId: null });
+    setModalInput({ reason: "", details: "", recommendations: "" });
+  };
+
+  const handleAssemblyChange = (e) => {
+    setSelectedAssembly(e.target.value);
+  };
+
+  // Renders the big preview area for the selected assembly (row count)
+  const renderMockupSections = (assemblies) => {
+    const isMobile = activeTab === "mobile";
+    return (
+      <div>
+        {assemblies.map((assemblyLabel) => {
+          const maxItemsPerRow = parseInt(assemblyLabel, 10);
+          let groupChunks = chunkArray(groupsState, maxItemsPerRow);
+
+          if (isMobile && innerCollapsed && groupChunks.length > 2) {
+            groupChunks = groupChunks.slice(0, 2);
+          }
+
+          const screenLabels =
+            activeTab === "desktop" ? ["1280", "Inh"] : ["375"];
+
+          return (
+            <div className="hubspokep-banner-container" key={assemblyLabel}>
+              <div style={{ display: "flex" }}>
+                <div className="hubspokep-assembly-label">
+                  {`${assemblyLabel}-ROW ASSEMBLY`}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", gap: "20px", overflowX: "auto" }}>
+                    {screenLabels.map((screenSize, index) => {
+                      const labelText = `${screenSize} (${
+                        isMobile ? "M" : "D"
+                      })`;
+                      return (
+                        <div key={`${assemblyLabel}-${screenSize}`}>
+                          <div
+                            className="hubspokep-banner-label"
+                            style={{
+                              backgroundColor:
+                                index === 0
+                                  ? "rgb(0, 57, 110)"
+                                  : "rgb(172, 173, 176)",
+                              color:
+                                index === 0
+                                  ? "rgb(255, 255, 255)"
+                                  : "rgb(81, 83, 87)",
+                            }}
+                          >
+                            {labelText}
+                          </div>
+                          <div
+                            className="hubspokep-banner"
+                            style={{ backgroundColor: metadata.bannerColor }}
+                          >
+                            <div className="hubspokep-page-name">
+                              <h3>{metadata.pageName}</h3>
+                            </div>
+                            <div
+                              className="hubspokep-banner-grid"
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: `repeat(${maxItemsPerRow}, 1fr)`,
+                                gap: "10px",
+                              }}
+                            >
+                              {groupChunks.map((chunk, chunkIndex) => (
+                                <React.Fragment key={`chunk-${chunkIndex}`}>
+                                  {chunk.map((group) => {
+                                    // find the selected asset for this group
+                                    const selected = group.allAssets.find(
+                                      (a) => a.id === group.selectedAssetId
+                                    );
+                                    const finalAsset =
+                                      selected || group.allAssets[0];
+
+                                    const cellSize = getImageSize(
+                                      assemblyLabel,
+                                      screenSize
+                                    );
+
+                                    return (
+                                      <div
+                                        key={`${assemblyLabel}-${screenSize}-${group.groupId}`}
+                                        style={{
+                                          display: "flex",
+                                          flexDirection: "column",
+                                          alignItems: "center",
+                                          width: `${cellSize}px`,
+                                        }}
+                                      >
+                                        <div
+                                          style={{
+                                            backgroundColor: "#EEE",
+                                            borderRadius: "8px",
+                                            display: "flex",
+                                            justifyContent: "center",
+                                            alignItems: "center",
+                                            width: `${cellSize}px`,
+                                            height: `${cellSize}px`,
+                                            marginBottom: "5px",
+                                          }}
+                                        >
+                                          <img
+                                            src={finalAsset?.image}
+                                            alt={finalAsset?.altText}
+                                            style={{
+                                              width: "100%",
+                                              height: "100%",
+                                              objectFit: "contain",
+                                            }}
+                                          />
+                                        </div>
+                                        <div
+                                          style={{
+                                            fontSize: "12px",
+                                            textAlign: "center",
+                                            whiteSpace: "normal",
+                                          }}
+                                        >
+                                          {finalAsset?.altText}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </React.Fragment>
+                              ))}
+                            </div>
+
+                            {/* For mobile, if user wants to see more/less */}
+                            {isMobile &&
+                              chunkArray(groupsState, maxItemsPerRow).length >
+                                2 && (
+                                <button
+                                  onClick={() => setInnerCollapsed((prev) => !prev)}
+                                  style={{
+                                    width: "100%",
+                                    borderRadius: "500px",
+                                    cursor: "pointer",
+                                    backgroundColor: "transparent",
+                                    border: "solid black 1px",
+                                    marginTop: "4px",
+                                    fontSize: "1rem",
+                                    height: "32px",
+                                  }}
+                                >
+                                  {innerCollapsed ? "See More" : "See Less"}
+                                </button>
+                              )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // click outside a group => deselect
+  const handleContainerClick = () => {
+    setSelectedAssetId(null);
+  };
+
+  // Show relevant action buttons if a group is selected
+  let actionButtons = null;
+  if (selectedAssetId) {
+    actionButtons = (
+      <>
+        <button onClick={() => handleAction("approve")}>Approve</button>
+        <button onClick={() => handleAction("reject")}>Reject</button>
+        <button onClick={() => handleAction("delete")}>Delete</button>
+      </>
+    );
+  }
+
+  // -------------------------------------------------------------------
+  // 5) Final return
+  // -------------------------------------------------------------------
+  return (
+    <div className="hubspokep-container" onClick={handleContainerClick}>
+      <div
+        className="hubspokep-top-section"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Meta Details */}
+        <div className="hubspokep-meta-details">
+          <div className="hubspokep-meta-details-content">
+            <h3>Meta Details</h3>
+            <p>
+              <strong>Page Name:</strong> {metadata.pageName}
+            </p>
+            <p>
+              <strong>Creator:</strong> {metadata.creator}
+            </p>
+            <p>
+              <strong>Creation Date:</strong> {metadata.creationDate}
+            </p>
+            <p>
+              <strong>Status:</strong> {metadata.status}
+            </p>
+            <p>
+              <strong>Device Type:</strong> {metadata.deviceType}
+            </p>
+          </div>
+
+          {/* [Placeholder for adding new item JSON, if needed] */}
+        </div>
+
+        {/* Groups/Assets Section */}
+        <div className="hubspokep-assets-section">
+          <div className="hubspokep-assets-header">
+            <h3>Assets (Groups)</h3>
+            <div style={{ display: "inline-block" }}>{actionButtons}</div>
+          </div>
+          <div
+            className="hubspokep-assets-grid"
+            onClick={(e) => e.stopPropagation()}
+            style={{ display: "flex", flexWrap: "wrap" }}
+          >
+            {groupsState.map((group) => (
+              <SortableItem
+                key={group.groupId}
+                group={group}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                onSelectGroup={handleSelectAsset}
+                isSelected={selectedAssetId === group.groupId}
+                onModelLabelChange={handleModelLabelChange}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Tab Buttons (Desktop/Mobile) */}
+        <div className="hubspokep-tabs" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => {
+              setActiveTab("desktop");
+              setMetadata((prev) => ({ ...prev, deviceType: "Desktop" }));
+            }}
+            className={activeTab === "desktop" ? "active" : ""}
+            aria-label="Switch to Desktop Tab"
+          >
+            Desktop
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab("mobile");
+              setMetadata((prev) => ({ ...prev, deviceType: "Mobile" }));
+            }}
+            className={activeTab === "mobile" ? "active" : ""}
             aria-label="Switch to Mobile Tab"
           >
             Mobile
@@ -934,30 +1767,17 @@ const HubspokePreview = () => {
         {/* Render the banner preview */}
         {renderMockupSections([selectedAssembly])}
 
-        {/* Save Button */}
+        {/* [CHANGED / NEW] Save Button => calls handleSave to build new JSON */}
         <div className="hubspokep-save-button-container">
-          <button
-            className="hubspokep-save-button"
-            onClick={() => {
-              // Example: log the final gridOutline to see updated assetIds
-              console.log("Final gridOutline:", gridOutline);
-              alert("Saved!");
-            }}
-          >
+          <button className="hubspokep-save-button" onClick={handleSave}>
             Save
           </button>
         </div>
 
-        {/* Approve/Reject/Delete Modals */}
-        {showApproveModal && (
-          <div>Approve Modal placeholder or <Approve ... /></div>
-        )}
-        {showRejectModal && (
-          <div>Reject Modal placeholder or <Reject ... /></div>
-        )}
-        {showDeleteModal && (
-          <div>Delete Modal placeholder or <Delete ... /></div>
-        )}
+        {/* Approve/Reject/Delete placeholders */}
+        {showApproveModal && <div>Approve Modal placeholder</div>}
+        {showRejectModal && <div>Reject Modal placeholder</div>}
+        {showDeleteModal && <div>Delete Modal placeholder</div>}
       </div>
     </div>
   );
@@ -966,11 +1786,8 @@ const HubspokePreview = () => {
 export default HubspokePreview;
 
 
-
 import React from "react";
 
-// ========== [CHANGED] SortableItem now receives a 'group' prop 
-//   that contains multiple assets. We pick from them via modelLabel. 
 export const SortableItem = ({
   group,
   onDragStart,
@@ -980,18 +1797,16 @@ export const SortableItem = ({
   isSelected,
   onModelLabelChange,
 }) => {
-  // ========== [NEW] Find the currently selected asset to show a small preview in the card ========== 
+  // The currently selected asset in this group
   const selectedAsset =
     group.allAssets.find((a) => a.id === group.selectedAssetId) ||
     group.allAssets[0];
 
-  // ========== [NEW] The dropdown options are all the modelLabel values in group.allAssets ========== 
+  // The user can pick which modelLabel to show
   const modelLabels = group.allAssets.map((a) => a.modelLabel);
 
-  // ========== [NEW] On user picking a new modelLabel, call parent to update the selected asset ========== 
   const handleChange = (e) => {
-    const newLabel = e.target.value;
-    onModelLabelChange(group.groupId, newLabel);
+    onModelLabelChange(group.groupId, e.target.value);
   };
 
   return (
@@ -1002,7 +1817,7 @@ export const SortableItem = ({
       onDragOver={onDragOver}
       onDrop={(e) => onDrop(e, group.groupId)}
       onClick={(e) => {
-        // prevent parent from deselecting 
+        // Prevent parent from deselecting if we click inside
         e.stopPropagation();
         onSelectGroup(group.groupId);
       }}
@@ -1016,12 +1831,9 @@ export const SortableItem = ({
         textAlign: "center",
       }}
     >
-      {/* Show some identifier for the group */}
       <div style={{ marginBottom: "8px", fontWeight: "bold" }}>
-        Group ID: {group.groupId}
+        Group: {group.groupId}
       </div>
-
-      {/* A small preview of the selected asset */}
       <div style={{ marginBottom: "8px" }}>
         <img
           alt={selectedAsset?.altText}
@@ -1029,9 +1841,6 @@ export const SortableItem = ({
           style={{ width: "100%", height: "80px", objectFit: "contain" }}
         />
       </div>
-
-      {/* [CHANGED] Instead of a dropdown with "tight", "overflow" etc. for CSS, 
-          we directly map the available modelLabels from the group's assets */}
       <div>
         <select
           value={selectedAsset?.modelLabel}
@@ -1048,7 +1857,3 @@ export const SortableItem = ({
     </div>
   );
 };
-
-
-
-
