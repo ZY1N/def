@@ -929,3 +929,155 @@ export default function MultiStepForm({ onAddToCart }) {
 }
 
 
+
+
+
+// formData
+{
+  "0": {
+    // The properties for step 0
+    properties: [ /* array of property objects */ ],
+    // A place for step 0's outputs (images, etc.)
+    outputs: {
+      images: [
+        { key: 'photo1', imageDataURL: '...' },
+        // more images
+      ],
+      // ...other future outputs
+    }
+  },
+  "1": {
+    properties: [ /* array of property objects */ ],
+    outputs: {
+      images: [
+        { key: 'avatar', imageDataURL: '...' },
+        // ...
+      ]
+    }
+  }
+  // ...
+}
+
+
+function buildInitialFormState(steps) {
+  const state = {};
+  steps.forEach((step, stepIndex) => {
+    state[stepIndex] = {
+      properties: buildPropertiesState(step.properties),
+      outputs: {
+        images: []
+      }
+    };
+  });
+  return state;
+}
+
+
+function handleImageUpload(stepIndex, key, dataURL) {
+  setFormData((prev) => {
+    // Make a shallow copy of the entire formData
+    const newFormData = { ...prev };
+
+    // Make a shallow copy of the step data
+    const stepData = { ...newFormData[stepIndex] };
+
+    // Copy outputs (so we don't mutate existing arrays/objects)
+    const newOutputs = { ...stepData.outputs };
+
+    // Add the new image to the step's images array
+    const newImages = [...newOutputs.images];
+    newImages.push({ key, imageDataURL: dataURL });
+
+    // Update stepData.outputs
+    newOutputs.images = newImages;
+    stepData.outputs = newOutputs;
+
+    // Finally, put the stepData back
+    newFormData[stepIndex] = stepData;
+    return newFormData;
+  });
+}
+
+function MultiStepForm() {
+  // formData = {
+  //   0: { properties: [...], outputs: { images: [...] } },
+  //   1: { properties: [...], outputs: { images: [...] } },
+  // }
+  const [formData, setFormData] = useState({});
+
+  const [activeStep, setActiveStep] = useState(0);
+
+  // For the active step, get images:
+  const currentImages = formData[activeStep]?.outputs?.images || [];
+
+  return (
+    <div>
+      {/* Step navigation, form input rendering, etc. */}
+
+      {/* Bottom section for images from the current step */}
+      <h3>Step {activeStep} Images</h3>
+      {currentImages.length === 0 && <p>No images for this step.</p>}
+      {currentImages.map((img, i) => (
+        <div key={i}>
+          <div>{img.key}</div>
+          <img
+            src={img.imageDataURL}
+            alt={img.key}
+            style={{ width: "100px", height: "100px" }}
+          />
+          {/* ...Add to Cart button or other actions... */}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+
+function flattenFormData(formData) {
+  let flattened = {};
+
+  for (const stepIndex in formData) {
+    const { properties, outputs } = formData[stepIndex];
+
+    // Flatten text/etc. properties
+    const stepFlattenedProps = flattenProperties(properties);
+    flattened = { ...flattened, ...stepFlattenedProps };
+
+    // Also handle images
+    // e.g., store them under some special key:
+    // `images_step_{stepIndex}` => array of image data
+    if (outputs?.images?.length) {
+      flattened[`images_step_${stepIndex}`] = outputs.images;
+    }
+  }
+  return flattened;
+}
+
+function flattenProperties(properties) {
+  let result = {};
+  properties.forEach((prop) => {
+    if (prop.properties) {
+      // container => recurse
+      result = { ...result, ...flattenProperties(prop.properties) };
+    } else {
+      // leaf
+      if (prop.key) result[prop.key] = prop.value;
+    }
+  });
+  return result;
+}
+
+
+const handleSubmit = () => {
+  const flattenedData = flattenFormData(formData);
+  console.log("Flattened data:", flattenedData);
+  // => {
+  //   firstName: 'Alice',
+  //   lastName: 'Smith',
+  //   images_step_0: [
+  //     { key: 'photo1', imageDataURL: '...' }
+  //   ],
+  //   ...
+  // }
+  // You can then post this wherever you need.
+};
