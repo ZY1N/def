@@ -196,35 +196,736 @@ Twitter
 
 
 
-// EXAMPLE
-const handleModelLabelChange = (groupId, newModelLabel) => {
-  setGroupsState((prev) =>
-    prev.map((group) => {
-      if (group.groupId === groupId) {
-        // find which asset corresponds to the new modelLabel
-        const foundAsset = group.allAssets.find(
-          (a) => a.modelLabel === newModelLabel
-        );
-        if (foundAsset) {
-          // [IMPORTANT] Also update the gridOutline
-          setGridOutline((oldOutline) =>
-            oldOutline.map((o) => {
-              if (o.groupId === groupId) {
-                return { ...o, assetId: foundAsset.id };
-              }
-              return o;
-            })
-          );
+import React, { useState, useEffect } from "react";
 
-          return {
-            ...group,
-            selectedAssetId: foundAsset.id,
+/**
+ * Example Steps data (the shape you provided).
+ * In reality, you might fetch this via an API call, or receive it as props.
+ */
+const initialStepsData = [
+  {
+    title: "Step Name 1",
+    passImageObjectIn: "yes",
+    properties: [
+      {
+        description: "Container 1",
+        properties: [
+          {
+            type: "text",
+            key: "firstName",
+            value: ""
+          },
+          {
+            type: "text",
+            key: "lastName",
+            value: ""
+          }
+        ]
+      }
+    ]
+  },
+  {
+    title: "Step Name 2",
+    passImageObjectIn: "no",
+    properties: [
+      {
+        description: "Parent Container",
+        properties: [
+          {
+            description: "Child Container",
+            properties: [
+              {
+                type: "text",
+                key: "nestedProperty",
+                value: ""
+              },
+              {
+                type: "image",
+                key: "avatar",
+                value: ""
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+];
+
+/**
+ * Helper function to build an initial state object
+ * for all steps/properties, so we can store input values
+ * systematically.
+ *
+ * Returns an object keyed by step index, containing
+ * property data that can be nested.
+ */
+function buildInitialFormState(steps) {
+  const state = {};
+  steps.forEach((step, stepIndex) => {
+    state[stepIndex] = buildPropertiesState(step.properties);
+  });
+  return state;
+}
+
+/**
+ * Recursively build the state for a given properties array (or object).
+ * This returns an object structure that mirrors the property nesting.
+ */
+function buildPropertiesState(properties) {
+  // If `properties` is an array, iterate over them
+  if (Array.isArray(properties)) {
+    return properties.map((prop) => {
+      // If a property has its own `properties` subfield, recurse
+      if (prop.properties) {
+        return {
+          description: prop.description || "",
+          properties: buildPropertiesState(prop.properties),
+          type: prop.type || null,
+          key: prop.key || null,
+          value: prop.value || ""
+        };
+      } else {
+        // It's a leaf property
+        return {
+          type: prop.type || "",
+          key: prop.key || "",
+          value: prop.value || "",
+        };
+      }
+    });
+  } else if (typeof properties === "object") {
+    // Sometimes your structure might have a direct object with `properties`.
+    // Adjust based on your actual data structure. For example:
+    return {
+      description: properties.description || "",
+      properties: buildPropertiesState(properties.properties),
+      type: properties.type || "",
+      key: properties.key || "",
+      value: properties.value || "",
+    };
+  }
+  // If none of the above, return as is or empty
+  return {};
+}
+
+/**
+ * A helper function that deeply updates the form state
+ * when the user changes a leaf property’s value.
+ */
+function updateFormDataAtPath(formData, stepIndex, path, newValue) {
+  // formData shape: { [stepIndex]: [ <properties> ] }
+  // path shape: an array describing how to descend into nested properties
+  // e.g. [0, "properties", 1] etc.
+
+  const newFormData = { ...formData };
+  let currentLevel = newFormData[stepIndex];
+
+  // We only want to modify a copy at each level to avoid mutating
+  // deep nested objects in React state.
+  for (let i = 0; i < path.length - 1; i++) {
+    const key = path[i];
+    if (Array.isArray(currentLevel)) {
+      currentLevel[key] = { ...currentLevel[key] };
+      currentLevel = currentLevel[key];
+    } else if (typeof currentLevel === "object") {
+      currentLevel[key] = { ...currentLevel[key] };
+      currentLevel = currentLevel[key];
+    }
+  }
+
+  // Now set the final property
+  const finalKey = path[path.length - 1];
+  currentLevel[finalKey] = newValue;
+
+  return newFormData;
+}
+
+/**
+ * The form fields for a single step. Recursively renders properties.
+ */
+function StepForm({ stepIndex, properties, formData, setFormData, parentPath = [] }) {
+  if (!Array.isArray(properties)) {
+    return null;
+  }
+
+  // Render each property
+  return (
+    <div style={{ paddingLeft: 20 }}>
+      {properties.map((prop, index) => {
+        const currentPath = [...parentPath, index];
+
+        // If this prop has nested properties, treat it as a "container"
+        if (prop.properties) {
+          return (
+            <div key={index} style={{ marginBottom: "1rem" }}>
+              {prop.description && (
+                <h4 style={{ marginBottom: "0.5rem" }}>{prop.description}</h4>
+              )}
+              <StepForm
+                stepIndex={stepIndex}
+                properties={prop.properties}
+                formData={formData}
+                setFormData={setFormData}
+                parentPath={[...currentPath, "properties"]}
+              />
+            </div>
+          );
+        } else {
+          // It's a leaf property with type / key / value
+          // Render an appropriate input
+          const handleChange = (e) => {
+            const newValue = e.target.value;
+            const updatedProp = { ...prop, value: newValue };
+            // Update state
+            const newFormData = updateFormDataAtPath(
+              formData,
+              stepIndex,
+              currentPath,
+              updatedProp
+            );
+            setFormData(newFormData);
           };
+
+          return (
+            <div key={index} style={{ marginBottom: "0.5rem" }}>
+              {/* A small label or key */}
+              <label style={{ display: "block", fontWeight: "bold" }}>
+                {prop.key} ({prop.type})
+              </label>
+
+              {prop.type === "text" && (
+                <input
+                  type="text"
+                  value={prop.value || ""}
+                  onChange={handleChange}
+                  style={{ width: "200px" }}
+                />
+              )}
+
+              {prop.type === "image" && (
+                <input
+                  type="file"
+                  onChange={handleChange}
+                  accept="image/*"
+                  style={{ width: "200px" }}
+                />
+              )}
+
+              {/* You can add more cases for different types if needed. */}
+            </div>
+          );
+        }
+      })}
+    </div>
+  );
+}
+
+/**
+ * The main multi-step form component.
+ */
+export default function MultiStepForm() {
+  const [stepsData, setStepsData] = useState([]);
+  const [activeStep, setActiveStep] = useState(0);
+  const [formData, setFormData] = useState({});
+
+  // In a real scenario, you'd fetch your steps from an API in useEffect
+  // For now, we'll just load them from initialStepsData
+  useEffect(() => {
+    setStepsData(initialStepsData);
+  }, []);
+
+  // Once stepsData is loaded, build the initial form state
+  useEffect(() => {
+    if (stepsData.length > 0) {
+      const initData = buildInitialFormState(stepsData);
+      setFormData(initData);
+    }
+  }, [stepsData]);
+
+  const handleStepClick = (index) => {
+    setActiveStep(index);
+  };
+
+  const handleSubmit = () => {
+    // formData is your complete data structure
+    console.log("Form Submitted! Data:", formData);
+
+    // If you need to flatten or transform `formData` to send to an API,
+    // you can do it here before making a request.
+    // e.g. axios.post("/api/submit", { formData }) ...
+  };
+
+  if (stepsData.length === 0) {
+    return <div>Loading steps...</div>;
+  }
+
+  return (
+    <div style={{ margin: "20px" }}>
+      {/* Step Navigation */}
+      <div style={{ display: "flex", marginBottom: "1rem" }}>
+        {stepsData.map((step, index) => (
+          <div
+            key={index}
+            onClick={() => handleStepClick(index)}
+            style={{
+              cursor: "pointer",
+              marginRight: "10px",
+              padding: "6px 12px",
+              border: index === activeStep ? "2px solid #007bff" : "1px solid #ccc",
+              borderRadius: "4px",
+              backgroundColor: index === activeStep ? "#eaf4ff" : "transparent"
+            }}
+          >
+            {step.title}
+          </div>
+        ))}
+      </div>
+
+      {/* Render active step */}
+      <div style={{ border: "1px solid #ccc", padding: "1rem" }}>
+        <h2>{stepsData[activeStep].title}</h2>
+        <p>Pass image object in? {stepsData[activeStep].passImageObjectIn}</p>
+
+        <StepForm
+          stepIndex={activeStep}
+          properties={stepsData[activeStep].properties}
+          formData={formData}
+          setFormData={setFormData}
+        />
+      </div>
+
+      <button style={{ marginTop: "1rem" }} onClick={handleSubmit}>
+        Submit All
+      </button>
+    </div>
+  );
+}
+
+
+
+function flattenFormData(formData) {
+  let flatResult = {};
+
+  // Iterate over each step in formData
+  for (const stepIndex in formData) {
+    const propertiesArray = formData[stepIndex];
+    // Recursively collect key-value pairs from these properties
+    const flattenedFromStep = flattenProperties(propertiesArray);
+    // Merge them into flatResult. If you want to prefix step keys, do so here.
+    flatResult = { ...flatResult, ...flattenedFromStep };
+  }
+
+  return flatResult;
+}
+
+/**
+ * Recursively flattens the "properties" array or object
+ * so you end up with key-value pairs.
+ */
+function flattenProperties(properties) {
+  let flattened = {};
+
+  // `properties` might be an array of container objects / leaf objects
+  if (Array.isArray(properties)) {
+    properties.forEach((prop) => {
+      if (prop.properties && Array.isArray(prop.properties)) {
+        // Container property: recurse
+        const childFlattened = flattenProperties(prop.properties);
+        flattened = { ...flattened, ...childFlattened };
+      } else {
+        // Leaf property: has a `key` and `value`
+        if (prop.key) {
+          flattened[prop.key] = prop.value;
         }
       }
-      return group;
-    })
-  );
-};
+    });
+  }
+  return flattened;
+}
 
- d
+
+function flattenProperties(properties, parentPath = "") {
+  let flattened = {};
+
+  if (Array.isArray(properties)) {
+    properties.forEach((prop, index) => {
+      // Build a path string from parent + current description or key
+      const newPath = prop.description
+        ? `${parentPath}${prop.description}.`
+        : parentPath;
+
+      if (prop.properties && Array.isArray(prop.properties)) {
+        // Recurse with a new parent path
+        const childFlattened = flattenProperties(prop.properties, newPath);
+        flattened = { ...flattened, ...childFlattened };
+      } else {
+        // Leaf node
+        if (prop.key) {
+          // e.g. "Container1.firstName"
+          const finalKey = `${newPath}${prop.key}`;
+          flattened[finalKey] = prop.value;
+        }
+      }
+    });
+  }
+
+  return flattened;
+}
+
+
+//////
+
+import React, { useState } from "react";
+import MultiStepForm from "./MultiStepForm";
+import ShoppingCart from "./ShoppingCart";
+
+export default function MainPage() {
+  // We'll store cart items here.
+  // For example, each item might be { id, name, imageDataURL, ... } 
+  const [cartItems, setCartItems] = useState([]);
+
+  // Function that the form can call to add new items (images) to the cart
+  const handleAddToCart = (item) => {
+    setCartItems((prev) => [...prev, item]);
+  };
+
+  return (
+    <div style={{ display: "flex", height: "100vh" }}>
+      {/* Form area - 80% */}
+      <div style={{ flex: "0 0 80%", borderRight: "1px solid #ccc" }}>
+        <MultiStepForm onAddToCart={handleAddToCart} />
+      </div>
+
+      {/* Cart area - 20% */}
+      <div style={{ flex: "0 0 20%" }}>
+        <ShoppingCart cartItems={cartItems} />
+      </div>
+    </div>
+  );
+}
+
+import React from "react";
+
+export default function ShoppingCart({ cartItems }) {
+  return (
+    <div style={{ padding: "1rem" }}>
+      <h3>Shopping Cart</h3>
+      {cartItems.length === 0 && <p>No items in cart.</p>}
+
+      {cartItems.map((item, index) => (
+        <div key={index} style={{ marginBottom: "0.5rem" }}>
+          {/* Display the image thumbnail or name. 
+              If `item.imageDataURL` is a base64 or blob, you can show an <img/>. */}
+          {item.imageDataURL && (
+            <img
+              src={item.imageDataURL}
+              alt={item.name || "cart-item"}
+              style={{ width: "80px", height: "80px", objectFit: "cover" }}
+            />
+          )}
+          {/* Or display any extra data you might want, e.g. item name, etc. */}
+          <div>{item.name || "Unnamed Image"}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+import React, { useState, useEffect } from "react";
+
+const initialStepsData = [
+  {
+    title: "Step 1",
+    passImageObjectIn: "yes",
+    properties: [
+      {
+        description: "Container 1",
+        properties: [
+          { type: "text", key: "firstName", value: "" },
+          { type: "text", key: "lastName", value: "" },
+          { type: "image", key: "photo1", value: "" }
+        ]
+      }
+    ]
+  },
+  {
+    title: "Step 2",
+    passImageObjectIn: "no",
+    properties: [
+      {
+        description: "Container 2",
+        properties: [
+          {
+            description: "Nested Container",
+            properties: [
+              { type: "text", key: "nestedProperty", value: "" },
+              { type: "image", key: "avatar", value: "" }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+];
+
+/** buildInitialFormState, buildPropertiesState, etc. 
+ * (Same as the previous example) */
+
+function buildPropertiesState(properties) {
+  if (Array.isArray(properties)) {
+    return properties.map((prop) => {
+      if (prop.properties) {
+        return {
+          description: prop.description || "",
+          properties: buildPropertiesState(prop.properties),
+          type: prop.type || null,
+          key: prop.key || null,
+          value: prop.value || ""
+        };
+      } else {
+        return {
+          type: prop.type || "",
+          key: prop.key || "",
+          value: prop.value || ""
+        };
+      }
+    });
+  }
+  return [];
+}
+
+function buildInitialFormState(steps) {
+  const state = {};
+  steps.forEach((step, stepIndex) => {
+    state[stepIndex] = buildPropertiesState(step.properties);
+  });
+  return state;
+}
+
+// Utility to update form data at a specific nested path
+function updateFormDataAtPath(formData, stepIndex, path, newValue) {
+  const newFormData = { ...formData };
+  let currentLevel = newFormData[stepIndex];
+
+  for (let i = 0; i < path.length - 1; i++) {
+    const key = path[i];
+    currentLevel[key] = Array.isArray(currentLevel[key])
+      ? [...currentLevel[key]]
+      : { ...currentLevel[key] };
+    currentLevel = currentLevel[key];
+  }
+
+  const finalKey = path[path.length - 1];
+  currentLevel[finalKey] = newValue;
+
+  return newFormData;
+}
+
+/** StepForm component */
+function StepForm({ stepIndex, properties, formData, setFormData, onImageUpload, parentPath = [] }) {
+  if (!Array.isArray(properties)) return null;
+
+  return (
+    <div style={{ paddingLeft: "1rem" }}>
+      {properties.map((prop, index) => {
+        const currentPath = [...parentPath, index];
+
+        if (prop.properties) {
+          // It's a container
+          return (
+            <div key={index} style={{ marginBottom: "1rem" }}>
+              {prop.description && <h4>{prop.description}</h4>}
+              <StepForm
+                stepIndex={stepIndex}
+                properties={prop.properties}
+                formData={formData}
+                setFormData={setFormData}
+                onImageUpload={onImageUpload}
+                parentPath={[...currentPath, "properties"]}
+              />
+            </div>
+          );
+        } else {
+          // It's a leaf property
+          const handleChange = (e) => {
+            if (prop.type === "image") {
+              const file = e.target.files[0];
+              if (file) {
+                // Convert file to a DataURL or object URL to preview
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                  // event.target.result is base64-encoded data
+                  const updatedProp = { ...prop, value: event.target.result };
+                  // Update form data
+                  const newFormData = updateFormDataAtPath(
+                    formData,
+                    stepIndex,
+                    currentPath,
+                    updatedProp
+                  );
+                  setFormData(newFormData);
+
+                  // Also notify parent that an image was uploaded
+                  // so we can display it in the bottom section
+                  onImageUpload(stepIndex, prop.key, event.target.result);
+                };
+                reader.readAsDataURL(file);
+              }
+            } else {
+              // Text input
+              const newValue = e.target.value;
+              const updatedProp = { ...prop, value: newValue };
+              const newFormData = updateFormDataAtPath(
+                formData,
+                stepIndex,
+                currentPath,
+                updatedProp
+              );
+              setFormData(newFormData);
+            }
+          };
+
+          return (
+            <div key={index} style={{ marginBottom: "0.5rem" }}>
+              <label style={{ display: "block", fontWeight: "bold" }}>
+                {prop.key} ({prop.type})
+              </label>
+
+              {prop.type === "text" && (
+                <input
+                  type="text"
+                  value={prop.value}
+                  onChange={handleChange}
+                  style={{ width: "200px" }}
+                />
+              )}
+
+              {prop.type === "image" && (
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleChange}
+                  style={{ width: "200px" }}
+                />
+              )}
+            </div>
+          );
+        }
+      })}
+    </div>
+  );
+}
+
+export default function MultiStepForm({ onAddToCart }) {
+  const [stepsData, setStepsData] = useState([]);
+  const [formData, setFormData] = useState({});
+  const [activeStep, setActiveStep] = useState(0);
+
+  // We'll store "collected images" here: { stepIndex, key, dataURL }
+  const [uploadedImages, setUploadedImages] = useState([]);
+
+  // Simulate loading steps from an API
+  useEffect(() => {
+    setStepsData(initialStepsData);
+  }, []);
+
+  // Build initial form state once steps are loaded
+  useEffect(() => {
+    if (stepsData.length > 0) {
+      const init = buildInitialFormState(stepsData);
+      setFormData(init);
+    }
+  }, [stepsData]);
+
+  // Handler for image uploads
+  const handleImageUpload = (stepIdx, propKey, dataURL) => {
+    // You could deduplicate if needed, but let's just push new images
+    setUploadedImages((prev) => [
+      ...prev,
+      { stepIndex: stepIdx, key: propKey, imageDataURL: dataURL }
+    ]);
+  };
+
+  const handleSubmit = () => {
+    console.log("Form data on submit:", formData);
+    // Flatten if needed or send to an API
+    alert("Form submitted (check console for data).");
+  };
+
+  return (
+    <div style={{ padding: "1rem" }}>
+      {/* Step navigation */}
+      <div style={{ display: "flex", marginBottom: "1rem" }}>
+        {stepsData.map((step, idx) => (
+          <button
+            key={idx}
+            onClick={() => setActiveStep(idx)}
+            style={{
+              marginRight: "10px",
+              backgroundColor: activeStep === idx ? "#007bff" : "#ccc",
+              color: "#fff",
+              border: "none",
+              padding: "0.5rem 1rem"
+            }}
+          >
+            {step.title}
+          </button>
+        ))}
+      </div>
+
+      {/* Active step form */}
+      {stepsData[activeStep] && (
+        <div style={{ border: "1px solid #ccc", padding: "1rem" }}>
+          <h2>{stepsData[activeStep].title}</h2>
+          <p>passImageObjectIn? {stepsData[activeStep].passImageObjectIn}</p>
+
+          <StepForm
+            stepIndex={activeStep}
+            properties={stepsData[activeStep].properties}
+            formData={formData}
+            setFormData={setFormData}
+            onImageUpload={handleImageUpload}
+          />
+        </div>
+      )}
+
+      {/* Display images at bottom */}
+      <div style={{ marginTop: "1rem" }}>
+        <h3>Uploaded Images</h3>
+        {uploadedImages.length === 0 && <p>No images uploaded yet.</p>}
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
+          {uploadedImages.map((img, index) => (
+            <div key={index} style={{ border: "1px solid #aaa", padding: "0.5rem" }}>
+              <div>{img.key}</div>
+              <img
+                src={img.imageDataURL}
+                alt={img.key}
+                style={{ width: "100px", height: "100px", objectFit: "cover" }}
+              />
+              <div style={{ marginTop: "0.5rem" }}>
+                <button
+                  onClick={() =>
+                    onAddToCart({
+                      name: img.key,
+                      imageDataURL: img.imageDataURL
+                    })
+                  }
+                >
+                  Add to Cart
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <button onClick={handleSubmit} style={{ marginTop: "1rem" }}>
+        Submit Entire Form
+      </button>
+    </div>
+  );
+}
+
+
