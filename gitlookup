@@ -196,32 +196,34 @@ Twitter
 
 
 
- const properties = useMemo(() => {
-    let properties = [];
+  const properties = useMemo(() => {
+    if (!formData || !formData[stepIndex] || !Array.isArray(formData[stepIndex].properties)) {
+      return []; // ✅ Prevents accessing undefined values
+    }
 
-    if (formData[stepIndex]) {
-      properties = formData[stepIndex].properties || [];
+    let target = formData[stepIndex].properties;
 
-      for (let key of parentPath) {
-        // ✅ Ensure the key exists and is either an array or an object
-        if (
-          properties &&
-          (Array.isArray(properties[key]) ||
-            (typeof properties[key] === "object" && properties[key] !== null))
-        ) {
-          const nextProperties = properties[key].properties;
+    for (let key of parentPath) {
+      // ✅ Ensure key exists before accessing
+      if (
+        target &&
+        typeof key !== "undefined" &&
+        (Array.isArray(target[key]) ||
+          (typeof target[key] === "object" && target[key] !== null))
+      ) {
+        const nextProperties = target[key].properties;
 
-          if (nextProperties) {
-            properties = nextProperties;
-          } else {
-            break; // Exit the loop if 'properties' key is not present
-          }
+        if (nextProperties) {
+          target = nextProperties;
         } else {
-          console.warn(`Path key ${key} is not defined or not an object/array`);
-          break; // Exit loop if path is invalid
+          console.warn(`Path key ${key} does not have a 'properties' key.`);
+          break;
         }
+      } else {
+        console.warn(`Invalid path key: ${key}`);
+        return []; // ✅ Prevents infinite loop by returning an empty array
       }
     }
 
-    return properties;
+    return target;
   }, [formData, stepIndex, parentPath]);
