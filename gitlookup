@@ -196,112 +196,32 @@ Twitter
 
 
 
-import React, { useMemo } from "react";
-import { Form } from "react-bootstrap";
+ const properties = useMemo(() => {
+    let properties = [];
 
-const StepForm = React.memo(function StepForm({
-  selectedWorkflow,
-  stepIndex,
-  formData,
-  setFormData,
-  onImageUpload,
-  parentPath = [],
-}) {
-  console.log("Rendering StepForm for step", stepIndex);
+    if (formData[stepIndex]) {
+      properties = formData[stepIndex].properties || [];
 
-  // ✅ Memoize properties to prevent unnecessary re-renders
-  const properties = useMemo(() => {
-    let target = formData?.[stepIndex]?.properties || [];
-    for (let key of parentPath) {
-      target = target?.[key]?.properties || target;
-    }
-    return target;
-  }, [formData, stepIndex, parentPath]);
+      for (let key of parentPath) {
+        // ✅ Ensure the key exists and is either an array or an object
+        if (
+          properties &&
+          (Array.isArray(properties[key]) ||
+            (typeof properties[key] === "object" && properties[key] !== null))
+        ) {
+          const nextProperties = properties[key].properties;
 
-  // ✅ Updates formData immutably while handling object-based `formData`
-  function updateFormDataAtPath(formData, stepIndex, path, newValue) {
-    const newFormData = structuredClone(formData); // ✅ Deep copy of formData
-
-    if (!newFormData[stepIndex]) return formData; // ✅ Ensure step exists
-
-    let currentLevel = newFormData[stepIndex].properties;
-    for (let i = 0; i < path.length - 1; i++) {
-      if (!currentLevel[path[i]]) return newFormData;
-      currentLevel = currentLevel[path[i]].properties;
-    }
-
-    const finalKey = path[path.length - 1];
-    if (currentLevel?.[finalKey]) {
-      currentLevel[finalKey] = { ...currentLevel[finalKey], value: newValue }; // ✅ Update only the value
-    }
-    return newFormData;
-  }
-
-  return (
-    <div style={{ paddingLeft: "1rem" }}>
-      {properties.map((input, index) => {
-        const currentPath = [...parentPath, index];
-
-        if (input.properties) {
-          return (
-            <div key={`${stepIndex}-${index}`} style={{ marginBottom: "1rem" }}>
-              {input.description && <h4>{input.description}</h4>}
-              <StepForm
-                selectedWorkflow={selectedWorkflow}
-                stepIndex={stepIndex}
-                formData={formData}
-                setFormData={setFormData}
-                parentPath={[...currentPath, "properties"]}
-              />
-            </div>
-          );
+          if (nextProperties) {
+            properties = nextProperties;
+          } else {
+            break; // Exit the loop if 'properties' key is not present
+          }
         } else {
-          const handleChange = (e) => {
-            let newValue = e.target.value;
-
-            if (input.type === "image") {
-              const file = e.target.files[0];
-              if (file) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                  setFormData(updateFormDataAtPath(formData, stepIndex, currentPath, event.target.result));
-                };
-                reader.readAsDataURL(file);
-              }
-              return;
-            }
-
-            if (input.type === "bool") {
-              newValue = e.target.checked; // ✅ Handle boolean input
-            } else if (input.type === "number") {
-              newValue = Number(newValue); // ✅ Convert to number
-            }
-
-            setFormData(updateFormDataAtPath(formData, stepIndex, currentPath, newValue));
-          };
-
-          // ✅ Get correct value from `formData`
-          let displayValue = properties[index]?.value || (input.type === "bool" ? false : "");
-
-          return (
-            <Form.Group key={`${stepIndex}-${input.key}`}>
-              <Form.Label>{input.description}</Form.Label>
-              <label style={{ display: "block", fontWeight: "bold" }}>
-                {input.key} ({input.type})
-              </label>
-              <Form.Control
-                type={input.type === "image" ? "file" : input.type === "bool" ? "checkbox" : "text"}
-                accept={input.type === "image" ? "image/*" : undefined}
-                value={input.type === "bool" ? undefined : displayValue}
-                checked={input.type === "bool" ? displayValue : undefined}
-                onChange={handleChange}
-              />
-            </Form.Group>
-          );
+          console.warn(`Path key ${key} is not defined or not an object/array`);
+          break; // Exit loop if path is invalid
         }
-      })}
-    </div>
-  );
-});
+      }
+    }
 
-export default StepForm;
+    return properties;
+  }, [formData, stepIndex, parentPath]);
