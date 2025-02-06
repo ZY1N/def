@@ -196,299 +196,140 @@ Twitter
 
 
 
-import React, { useState } from "react";
+Stepper 
+import { useState } from "react";
+import "bootstrap/dist/css/bootstrap.min.css";
 
-const ImageUploadFields = () => {
-  // Dummy images that the user can drag from
-  const dummyImages = [
-    "https://via.placeholder.com/50",
-    "https://via.placeholder.com/50/FF0000",
-    "https://via.placeholder.com/50/00FF00",
-  ];
+export default function BootstrapStepper() {
+  const steps = ["thing1", "thing2", "thing3", "thing4"];
+  const [currentStep, setCurrentStep] = useState(0);
 
-  // Each field has: { id, images: [], hasUploaded: false }
-  const [fields, setFields] = useState([
-    { id: Date.now(), images: [], hasUploaded: false },
-  ]);
+  return (
+    <div className="d-flex flex-column align-items-center justify-content-center vh-100 bg-dark text-white">
+      {/* Stepper Navigation */}
+      <div className="d-flex align-items-center w-75 position-relative">
+        {steps.map((step, index) => (
+          <div key={index} className="d-flex flex-column align-items-center position-relative" style={{ cursor: "pointer", zIndex: 10 }} onClick={() => setCurrentStep(index)}>
+            {/* Step Circle */}
+            <div className={`rounded-circle d-flex align-items-center justify-content-center border border-4 ${currentStep >= index ? "border-primary bg-primary text-white" : "border-secondary bg-dark text-secondary"}`} 
+              style={{ width: "50px", height: "50px", fontSize: "18px" }}>
+              {index + 1}
+            </div>
+            {/* Step Label */}
+            <span className="mt-2">{step}</span>
+          </div>
+        ))}
 
-  // Convert file to base64 using Promises
-  const convertToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = (err) => reject(err);
-    });
+        {/* Connecting Line */}
+        <div className="position-absolute top-50 start-0 w-100 bg-secondary" style={{ height: "5px", transform: "translateY(-50%)", zIndex: 0 }}>
+          <div className="bg-primary" style={{ height: "5px", width: `${(currentStep / (steps.length - 1)) * 100}%`, transition: "width 0.3s ease" }}></div>
+        </div>
+      </div>
+
+      {/* Step Content */}
+      <div className="mt-4 display-4">{steps[currentStep]}</div>
+    </div>
+  );
+}
+
+
+import { useState } from "react";
+
+export default function Base64ImageCarousel({ images }) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  if (!images || images.length === 0) {
+    return <p className="text-center text-gray-500">No images available</p>;
+  }
+
+  const nextSlide = () => {
+    setCurrentIndex((prevIndex) => (prevIndex + 1) % images.length);
   };
 
-  // Handle dropping either from dummy store or local file(s)
-  const handleDrop = (event, fieldId) => {
-    event.preventDefault();
-
-    // Check if user dragged an image from the dummy store
-    const storeSrc = event.dataTransfer.getData("text/plain");
-    if (storeSrc) {
-      setFields((prev) =>
-        prev.map((field) =>
-          field.id === fieldId
-            ? {
-                ...field,
-                images: [
-                  ...field.images,
-                  {
-                    id: storeSrc,
-                    name: "Dragged Image",
-                    base64: storeSrc,
-                  },
-                ],
-                hasUploaded: true,
-              }
-            : field
-        )
-      );
-      return; // Done
-    }
-
-    // Otherwise, assume user dropped local file(s)
-    const files = Array.from(event.dataTransfer.files);
-    if (files.length === 0) return;
-
-    Promise.all(
-      files.map((file) =>
-        convertToBase64(file).then((base64) => ({
-          id: URL.createObjectURL(file),
-          name: file.name,
-          base64,
-        }))
-      )
-    ).then((base64Files) => {
-      setFields((prev) =>
-        prev.map((field) =>
-          field.id === fieldId
-            ? {
-                ...field,
-                images: [...field.images, ...base64Files],
-                hasUploaded: true,
-              }
-            : field
-        )
-      );
-    });
-  };
-
-  // Handle selecting files with the file input
-  const handleFileUpload = (event, fieldId) => {
-    const files = Array.from(event.target.files);
-    if (files.length === 0) return;
-
-    Promise.all(
-      files.map((file) =>
-        convertToBase64(file).then((base64) => ({
-          id: URL.createObjectURL(file),
-          name: file.name,
-          base64,
-        }))
-      )
-    ).then((base64Files) => {
-      setFields((prev) =>
-        prev.map((field) =>
-          field.id === fieldId
-            ? {
-                ...field,
-                images: [...field.images, ...base64Files],
-                hasUploaded: true,
-              }
-            : field
-        )
-      );
-    });
-  };
-
-  // Remove an image from a particular field
-  // If field has no images left after removal, remove that field
-  const removeImage = (fieldId, imageId) => {
-    setFields((prev) =>
-      prev.reduce((acc, field) => {
-        if (field.id === fieldId) {
-          const updatedImages = field.images.filter(
-            (img) => img.id !== imageId
-          );
-          // If no images left => remove the field
-          if (updatedImages.length === 0) {
-            return acc; // skip pushing this field
-          }
-          // Otherwise update with the new images array
-          return [...acc, { ...field, images: updatedImages }];
-        } else {
-          return [...acc, field];
-        }
-      }, [])
+  const prevSlide = () => {
+    setCurrentIndex((prevIndex) =>
+      prevIndex === 0 ? images.length - 1 : prevIndex - 1
     );
   };
 
-  // Add a new (empty) field
-  const addField = () => {
-    setFields((prev) => [
-      ...prev,
-      { id: Date.now(), images: [], hasUploaded: false },
-    ]);
-  };
-
-  // Check if the "Add More" button should be disabled
-  // i.e. if the last field is empty (no images), disable it
-  const lastField = fields[fields.length - 1];
-  const disableAddMore = lastField && lastField.images.length === 0;
-
   return (
-    <div>
-      {fields.map((field) => (
-        <div key={field.id} style={{ marginBottom: "1rem" }}>
-          {/* 
-            Show the entire DnD div only if there are NO images 
-            => once the field is "filled," hide the DnD 
-          */}
-          {field.images.length === 0 && (
-            <div
-              onDrop={(event) => handleDrop(event, field.id)}
-              onDragOver={(event) => event.preventDefault()}
-              style={{
-                width: "100%",
-                height: "40px",
-                border: "1px solid #ced4da",
-                borderRadius: "5px",
-                padding: "5px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                cursor: "pointer",
-                backgroundColor: "#f8f9fa",
-                position: "relative",
-              }}
-            >
-              <span>Drag & Drop or Click to Upload</span>
+    <div className="relative w-full max-w-2xl mx-auto">
+      {/* Image Display */}
+      <div className="overflow-hidden rounded-xl shadow-lg">
+        <img
+          src={`data:image/png;base64,${images[currentIndex]}`}
+          alt={`Slide ${currentIndex + 1}`}
+          className="w-full h-64 object-cover transition-opacity duration-500"
+        />
+      </div>
 
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={(e) => handleFileUpload(e, field.id)}
-                style={{
-                  position: "absolute",
-                  opacity: 0,
-                  width: "100%",
-                  height: "100%",
-                  cursor: "pointer",
-                }}
-              />
-            </div>
-          )}
-
-          {/* Show label only if there are images in this field */}
-          {field.images.length > 0 && (
-            <div
-              style={{
-                fontWeight: "bold",
-                marginTop: "10px",
-                marginBottom: "5px",
-              }}
-            >
-              Images Uploaded:
-            </div>
-          )}
-
-          {/* Display images vertically */}
-          {field.images.map((file) => (
-            <div
-              key={file.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                marginBottom: "5px",
-              }}
-            >
-              <img
-                src={file.base64}
-                alt={file.name}
-                style={{
-                  width: "50px",
-                  height: "50px",
-                  objectFit: "cover",
-                  borderRadius: "5px",
-                }}
-              />
-
-              <button
-                onClick={() => removeImage(field.id, file.id)}
-                style={{
-                  background: "red",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "50%",
-                  width: "20px",
-                  height: "20px",
-                  cursor: "pointer",
-                  fontSize: "12px",
-                  marginLeft: "5px",
-                }}
-              >
-                X
-              </button>
-            </div>
-          ))}
-        </div>
-      ))}
-
-      {/* 
-        Disable "Add More" if the last field is empty (no images).
-        => Forces user to fill each field before adding another.
-      */}
+      {/* Navigation Buttons */}
       <button
-        onClick={addField}
-        disabled={disableAddMore}
-        style={{
-          backgroundColor: disableAddMore ? "gray" : "green",
-          color: "#fff",
-          padding: "8px 12px",
-          border: "none",
-          borderRadius: "4px",
-          cursor: disableAddMore ? "not-allowed" : "pointer",
-        }}
+        onClick={prevSlide}
+        className="absolute top-1/2 left-4 transform -translate-y-1/2 bg-black/50 text-white p-2 rounded-full"
       >
-        Add More
+        ◀
+      </button>
+      <button
+        onClick={nextSlide}
+        className="absolute top-1/2 right-4 transform -translate-y-1/2 bg-black/50 text-white p-2 rounded-full"
+      >
+        ▶
       </button>
 
-      {/* Dummy Store to drag images from */}
-      <div
-        style={{
-          marginTop: "20px",
-          borderTop: "2px solid #ddd",
-          paddingTop: "10px",
-        }}
-      >
-        <h4>Drag from Image Store:</h4>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {dummyImages.map((src, idx) => (
-            <img
-              key={idx}
-              src={src}
-              alt={`dummy-${idx}`}
-              draggable="true"
-              onDragStart={(event) => {
-                event.dataTransfer.setData("text/plain", src);
-              }}
-              style={{
-                width: "50px",
-                height: "50px",
-                objectFit: "cover",
-                borderRadius: "5px",
-                cursor: "grab",
-              }}
-            />
-          ))}
-        </div>
+      {/* Dots Indicator */}
+      <div className="flex justify-center mt-2 space-x-2">
+        {images.map((_, index) => (
+          <span
+            key={index}
+            className={`w-3 h-3 rounded-full ${
+              index === currentIndex ? "bg-gray-800" : "bg-gray-300"
+            }`}
+          ></span>
+        ))}
       </div>
     </div>
   );
-};
+}
 
-export default ImageUploadFields;
+grouped images
+
+import { useState, useEffect } from "react";
+
+export default function GroupedImageCarousel({ items }) {
+  const [groupedImages, setGroupedImages] = useState({});
+
+  useEffect(() => {
+    // Group images by name prefix (before "-groupX")
+    const groups = {};
+    items.forEach(({ name, image }) => {
+      const baseName = name.split("-group")[0]; // Extract group name
+      if (!groups[baseName]) {
+        groups[baseName] = [];
+      }
+      groups[baseName].push({ name, image });
+    });
+
+    setGroupedImages(groups);
+  }, [items]);
+
+  return (
+    <div className="flex flex-col space-y-6">
+      {Object.entries(groupedImages).map(([groupName, images]) => (
+        <div key={groupName} className="p-4 border-2 border-gray-400 rounded-lg shadow-md">
+          <h2 className="text-lg font-bold text-gray-700 mb-2">{groupName}</h2>
+          <div className="flex space-x-4 overflow-x-auto">
+            {images.map(({ name, image }, index) => (
+              <img
+                key={index}
+                src={`data:image/png;base64,${image}`}
+                alt={name}
+                className="w-40 h-40 object-cover rounded-md"
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
