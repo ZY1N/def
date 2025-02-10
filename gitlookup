@@ -196,140 +196,149 @@ Twitter
 
 
 
-Stepper 
 import { useState } from "react";
-import "bootstrap/dist/css/bootstrap.min.css";
+const CollapsibleCarousel = ({ items }) => {
+  const [isOpen, setIsOpen] = useState(true);
+  const [startIndex, setStartIndex] = useState(0);
+  const itemsPerRow = 5;
 
-export default function BootstrapStepper() {
-  const steps = ["thing1", "thing2", "thing3", "thing4"];
-  const [currentStep, setCurrentStep] = useState(0);
-
-  return (
-    <div className="d-flex flex-column align-items-center justify-content-center vh-100 bg-dark text-white">
-      {/* Stepper Navigation */}
-      <div className="d-flex align-items-center w-75 position-relative">
-        {steps.map((step, index) => (
-          <div key={index} className="d-flex flex-column align-items-center position-relative" style={{ cursor: "pointer", zIndex: 10 }} onClick={() => setCurrentStep(index)}>
-            {/* Step Circle */}
-            <div className={`rounded-circle d-flex align-items-center justify-content-center border border-4 ${currentStep >= index ? "border-primary bg-primary text-white" : "border-secondary bg-dark text-secondary"}`} 
-              style={{ width: "50px", height: "50px", fontSize: "18px" }}>
-              {index + 1}
-            </div>
-            {/* Step Label */}
-            <span className="mt-2">{step}</span>
-          </div>
-        ))}
-
-        {/* Connecting Line */}
-        <div className="position-absolute top-50 start-0 w-100 bg-secondary" style={{ height: "5px", transform: "translateY(-50%)", zIndex: 0 }}>
-          <div className="bg-primary" style={{ height: "5px", width: `${(currentStep / (steps.length - 1)) * 100}%`, transition: "width 0.3s ease" }}></div>
-        </div>
-      </div>
-
-      {/* Step Content */}
-      <div className="mt-4 display-4">{steps[currentStep]}</div>
-    </div>
-  );
-}
-
-
-import { useState } from "react";
-
-export default function Base64ImageCarousel({ images }) {
-  const [currentIndex, setCurrentIndex] = useState(0);
-
-  if (!images || images.length === 0) {
-    return <p className="text-center text-gray-500">No images available</p>;
-  }
-
+  const toggleCollapse = () => setIsOpen(!isOpen);
   const nextSlide = () => {
-    setCurrentIndex((prevIndex) => (prevIndex + 1) % images.length);
+    if (startIndex + itemsPerRow < items.length) {
+      setStartIndex(startIndex + itemsPerRow);
+    }
   };
 
   const prevSlide = () => {
-    setCurrentIndex((prevIndex) =>
-      prevIndex === 0 ? images.length - 1 : prevIndex - 1
-    );
+    if (startIndex - itemsPerRow >= 0) {
+      setStartIndex(startIndex - itemsPerRow);
+    }
   };
 
   return (
-    <div className="relative w-full max-w-2xl mx-auto">
-      {/* Image Display */}
-      <div className="overflow-hidden rounded-xl shadow-lg">
-        <img
-          src={`data:image/png;base64,${images[currentIndex]}`}
-          alt={`Slide ${currentIndex + 1}`}
-          className="w-full h-64 object-cover transition-opacity duration-500"
-        />
-      </div>
-
-      {/* Navigation Buttons */}
+    <div style={{ width: "100%", textAlign: "center" }}>
+      {/* Collapsible Button */}
       <button
-        onClick={prevSlide}
-        className="absolute top-1/2 left-4 transform -translate-y-1/2 bg-black/50 text-white p-2 rounded-full"
+        onClick={toggleCollapse}
+        style={{
+          marginBottom: "10px",
+          padding: "8px 16px",
+          background: "#007BFF",
+          color: "#FFF",
+          border: "none",
+          cursor: "pointer",
+          fontSize: "20px",
+        }}
       >
-        ◀
-      </button>
-      <button
-        onClick={nextSlide}
-        className="absolute top-1/2 right-4 transform -translate-y-1/2 bg-black/50 text-white p-2 rounded-full"
-      >
-        ▶
+        {isOpen ? "Hide Carousel ▲" : "Show Carousel ▼"}
       </button>
 
-      {/* Dots Indicator */}
-      <div className="flex justify-center mt-2 space-x-2">
-        {images.map((_, index) => (
-          <span
-            key={index}
-            className={`w-3 h-3 rounded-full ${
-              index === currentIndex ? "bg-gray-800" : "bg-gray-300"
-            }`}
-          ></span>
-        ))}
-      </div>
-    </div>
-  );
-}
+      {/* Carousel */}
+      {isOpen && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {/* Prev Button - Outside the Image Row */}
+          <button
+            onClick={prevSlide}
+            disabled={startIndex === 0}
+            style={{
+              width: "30px",
+              height: "30px",
+              borderRadius: "50%",
+              background: "white",
+              color: startIndex === 0 ? "grey" : "black",
+              border: `1px solid ${startIndex === 0 ? "grey" : "black"}`,
+              fontSize: "20px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: startIndex === 0 ? "not-allowed" : "pointer",
+              marginRight: "20px",
+            }}
+          >
+            ◀
+          </button>
 
-grouped images
-
-import { useState, useEffect } from "react";
-
-export default function GroupedImageCarousel({ items }) {
-  const [groupedImages, setGroupedImages] = useState({});
-
-  useEffect(() => {
-    // Group images by name prefix (before "-groupX")
-    const groups = {};
-    items.forEach(({ name, image }) => {
-      const baseName = name.split("-group")[0]; // Extract group name
-      if (!groups[baseName]) {
-        groups[baseName] = [];
-      }
-      groups[baseName].push({ name, image });
-    });
-
-    setGroupedImages(groups);
-  }, [items]);
-
-  return (
-    <div className="flex flex-col space-y-6">
-      {Object.entries(groupedImages).map(([groupName, images]) => (
-        <div key={groupName} className="p-4 border-2 border-gray-400 rounded-lg shadow-md">
-          <h2 className="text-lg font-bold text-gray-700 mb-2">{groupName}</h2>
-          <div className="flex space-x-4 overflow-x-auto">
-            {images.map(({ name, image }, index) => (
-              <img
-                key={index}
-                src={`data:image/png;base64,${image}`}
-                alt={name}
-                className="w-40 h-40 object-cover rounded-md"
-              />
-            ))}
+          {/* Image Grid Container */}
+          <div
+            style={{
+              width: "80%",
+              // border: "1px solid #ddd",
+              padding: "20px",
+              borderRadius: "5px",
+              overflow: "hidden",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
+            {/* Image Grid */}
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                width: "100%",
+                justifyContent: "center",
+              }}
+            >
+              {items
+                .slice(startIndex, startIndex + itemsPerRow)
+                .map((item, index) => (
+                  <div
+                    key={index}
+                    style={{ textAlign: "center", flex: "1 1 18%" }}
+                  >
+                    <img
+                      src={item}
+                      alt={`Image ${index}`}
+                      style={{
+                        width: "100%",
+                        height: "auto",
+                        maxHeight: "200px",
+                        objectFit: "cover",
+                        borderRadius: "5px",
+                        border: "1px solid #ddd",
+                      }}
+                    />
+                  </div>
+                ))}
+            </div>
           </div>
+
+          {/* Next Button - Outside the Image Row */}
+          <button
+            onClick={nextSlide}
+            disabled={startIndex + itemsPerRow >= items.length}
+            style={{
+              width: "30px",
+              height: "30px",
+              borderRadius: "50%",
+              background: "white",
+              color:
+                startIndex + itemsPerRow >= items.length ? "grey" : "black",
+              border: `1px solid ${
+                startIndex + itemsPerRow >= items.length ? "grey" : "black"
+              }`,
+              fontSize: "20px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor:
+                startIndex + itemsPerRow >= items.length
+                  ? "not-allowed"
+                  : "pointer",
+              marginLeft: "20px",
+            }}
+          >
+            ▶
+          </button>
         </div>
-      ))}
+      )}
     </div>
   );
-}
+};
+export default CollapsibleCarousel;
